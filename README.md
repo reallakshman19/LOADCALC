@@ -10,6 +10,7 @@ npm install
 npm run dev       # http://localhost:5173
 npm run build     # -> dist/
 npm run preview
+npm test          # node:test files + check scripts (scripts/run-tests.mjs)
 ```
 
 Use **3D Demo** in the Dataset Tree to load the bundled fixture. Then open
@@ -28,8 +29,11 @@ Use **3D Demo** in the Dataset Tree to load the bundled fixture. Then open
 ## What was removed
 
 The LAFEA, LFEA (linear piping pipeline, ACCDB/InputXML/StagedJSON intake),
-Empirical workbench, Empirical V3 safety workbench, LFEA pre-flight, the tab
-benchmark badge, and all QA/benchmark scripts, docs and e2e suites.
+Empirical workbench, Empirical V3 safety workbench and its "Empirical Calc V3"
+analysis capability (with the `empirical-v3-safety`, `linear-fea-*` and
+StagedJSON authority-overlay modules only it used), LFEA pre-flight, the
+properties panel's LFEA support-actions section, the tab benchmark badge, and
+the upstream docs, e2e suites and release-governance scripts.
 
 ## Files changed from upstream
 
@@ -39,6 +43,15 @@ Upstream code is copied unchanged except for:
 - `src/workspace/bootstrap.js` no longer builds the LAFEA/LFEA/Empirical controllers or the tab benchmark.
 - `src/workspace/workspace-layout.js` drops those view roots and their styles, and rebrands the header.
 - `src/workspace/application-shell-controller.js` limits navigation to `WORKSPACE` and `LOAD_CALC`.
+- `src/workspace/analysis-capabilities.js` registers only the support-load capability.
+- `src/workspace/properties-panel.js` no longer renders LFEA support actions.
+
+## Tests
+
+`npm test` runs the upstream tests and check scripts whose imports stay inside
+this app (`tests/*.test.*` plus `scripts/check-manifest.json`).
+`scripts/qualify-upstream-tests.mjs` finds such candidates in an upstream
+checkout. Tests that already failed upstream were not ported.
 
 ## Re-syncing from upstream
 
@@ -53,4 +66,4 @@ OUT_DIR=. node scripts/trace-deps.mjs . _source src/main.js   # writes trace.jso
 ```
 
 Copy any file listed in `trace.json` that is not yet in this app, but keep the
-four files above. Then run `npm run build` and boot the app in a browser.
+files listed above. Then run `npm run build` and boot the app in a browser.
