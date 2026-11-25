@@ -1,0 +1,215 @@
+import {
+  topologyEditTableColumnsFor,
+} from '../topology-edit/table/topology-edit-table-columns.js';
+import {
+  topologyEditTableColumnProfile,
+} from '../topology-edit/table/topology-edit-table-column-profiles.js';
+import {
+  deriveTopologyEditTableCellCapability,
+} from '../topology-edit/table/topology-edit-table-edit-capability.js';
+import {
+  isTopologyEditTableResolvedEngineeringKey,
+  isTopologyEditTableVirtualGeometryKey,
+  topologyEditTableResolvedEngineeringFields,
+  topologyEditTableVirtualGeometryFields,
+} from '../topology-edit/table/topology-edit-table-virtual-geometry.js';
+import {
+  renderTopologyEditTableNodePositionEditor,
+} from './topology-edit-table-engineering-editor.js';
+import {
+  renderTopologyEditTableSupportPlacementEditor,
+} from './topology-edit-table-support-placement-editor.js';
+import {
+  renderTopologyEditTableSupportRestraintEditor,
+} from './topology-edit-table-support-restraint-editor.js';
+
+const TYPE_ORDER = ['PIPE', 'ELBOW', 'FLANGE', 'VALVE', 'TEE', 'REDUCER', 'SUPPORT', 'COMPONENT', 'JUNCTION'];
+
+export function topologyEditTableVisibleColumns(projection, profileInput = 'ALL') {
+  const rows = projection?.rows ?? [];
+  const seen = new Map();
+  addDescriptors(seen, topologyEditTableColumnsFor('COMPONENT'));
+  const present = new Set(rows.map((row) => row.elementType));
+  for (const type of TYPE_ORDER) {
+    if (present.has(type)) addDescriptors(seen, topologyEditTableColumnsFor(type));
+  }
+  for (const type of [...present].sort()) {
+    if (!TYPE_ORDER.includes(type)) addDescriptors(seen, topologyEditTableColumnsFor(type));
+  }
+  for (const row of rows) {
+    for (const key of Object.keys(row.fields ?? {})) {
+      if (!seen.has(key)) seen.set(key, fallbackDescriptor(key));
+    }
+  }
+  const all = [...seen.values()];
+  const profile = String(profileInput ?? 'ALL').trim().toUpperCase();
+  if (profile === 'ALL') return all;
+  const allowed = new Set(topologyEditTableColumnProfile(profile, [...present]).columnKeys);
+  return all.filter((column) => allowed.has(column.key));
+}
+
+export function renderTopologyEditTableAllProperties(row, runtime) {
+  if (!row) return '';
+  const descriptors = descriptorMap(row.elementType);
+  const fieldKeys = orderedFieldKeys(row, descriptors);
+  const topology = runtime?.controller?.session?.currentTopology?.();
+  const virtual = topologyEditTableVirtualGeometryFields(
+    row,
+    topology,
+    runtime?.transientNodeDrafts ?? {},
+  );
+  const resolved = topologyEditTableResolvedEngineeringFields(row, topology);
+  const projected = fieldKeys.map((key) => ({
+    label: descriptors.get(key)?.label ?? humanLabel(key),
+    value: displayFieldValue(row, key, virtual, resolved),
+    authority: displayFieldAuthority(row, key, virtual, resolved),
+    capability: deriveTopologyEditTableCellCapability({
+      row,
+      columnKey: key,
+      projection: runtime?.projection,
+      canonicalTopology: topology,
+    }),
+  }));
+  const identity = [
+    ['Canonical ID', row.identity?.canonicalId],
+    ['Canonical kind', row.identity?.canonicalKind],
+    ['Component key', row.identity?.componentKey],
+    ['Entity ID', row.identity?.entityId],
+    ['Source entity ID', row.identity?.sourceEntityId],
+    ['Node IDs', row.identity?.nodeIds],
+    ['Port bindings', row.identity?.portBindings],
+    ['Target revision', row.targetRevision],
+  ];
+  const custody = Object.entries(row.custody ?? {}).map(([key, value]) => [humanLabel(key), value]);
+  const source = sourcePropertyRows(sourceEntityFor(runtime, row));
+  const staged = stagedIntentFor(runtime, row);
+  return `${renderTopologyEditTableNodePositionEditor(row, staged, runtime)}${renderTopologyEditTableSupportPlacementEditor(row, staged, runtime)}${renderTopologyEditTableSupportRestraintEditor(row, staged)}<section class="topology-edit-table__all-properties" data-table-all-properties>
+    <header><strong>All properties</strong><span>${projected.length} projected · ${source.length} source/vendor</span></header>
+    ${propertyTable('Identity', identity.map(([label, value]) => ({ label, value, authority: 'IDENTITY' })))}
+    ${propertyTable('Engineering properties', projected, true)}
+    ${propertyTable('Custody', custody.map(([label, value]) => ({ label, value, authority: 'READ_ONLY' })))}
+    ${source.length ? propertyTable('Source / vendor properties (read-only)', source.map(([label, value]) => ({
+      label, value, authority: 'SOURCE_OBSERVED',
+    }))) : ''}
+  </section>`;
+}
+
+export function topologyEditTableTypeSummary(rows = []) {
+  const counts = new Map();
+  for (const row of rows) counts.set(row.elementType, (counts.get(row.elementType) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort(([left], [right]) => typeRank(left) - typeRank(right) || left.localeCompare(right))
+    .map(([type, count]) => `${typeLabel(type)} ${count}`)
+    .join(' · ');
+}
+
+function propertyTable(title, rows, showCapability = false) {
+  return `<details class="topology-edit-table__property-group" open>
+    <summary>${escapeHtml(title)}</summary>
+    <div class="topology-edit-table__property-scroll"><table aria-label="${escapeHtml(title)}">
+      <thead><tr><th>Property</th><th>Value</th><th>Authority</th>${showCapability ? '<th>Capability</th>' : ''}</tr></thead>
+      <tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(row.label)}</th><td>${escapeHtml(display(row.value))}</td><td>${escapeHtml(row.authority)}</td>${showCapability ? `<td data-table-capability-status="${escapeHtml(row.capability?.status)}" data-table-capability-reason="${escapeHtml(row.capability?.reasonCode)}">${escapeHtml(capabilityText(row.capability))}</td>` : ''}</tr>`).join('')}</tbody>
+    </table></div>
+  </details>`;
+}
+
+function displayFieldValue(row, key, virtual, resolved) {
+  if (isTopologyEditTableVirtualGeometryKey(key)) return virtual[key];
+  if (isTopologyEditTableResolvedEngineeringKey(key)) return resolved[key];
+  return row.fields?.[key];
+}
+function displayFieldAuthority(row, key, virtual, resolved) {
+  if (isTopologyEditTableVirtualGeometryKey(key)) return virtualAuthority(key, virtual[key]);
+  if (isTopologyEditTableResolvedEngineeringKey(key)) return resolvedAuthority(key, resolved[key]);
+  return row.fieldAuthority?.[key] ?? 'UNRESOLVED';
+}
+function resolvedAuthority(key, value) {
+  if (value === null || value === undefined) return 'UNRESOLVED';
+  if (key === 'insideDiameterMm') return 'DERIVED_DISPLAY';
+  if (key === 'catalogueRecordId') return 'EXACT_CATALOGUE';
+  return 'CANONICAL';
+}
+function stagedIntentFor(runtime, row) {
+  return (runtime?.intents ?? []).find((intent) => intent.target?.canonicalId === row.identity?.canonicalId) ?? null;
+}
+function sourceEntityFor(runtime, row) {
+  const ids = new Set([
+    row.identity?.componentKey,
+    row.identity?.entityId,
+    row.identity?.sourceEntityId,
+  ].filter(Boolean).map(String));
+  return (runtime?.controller?.workspaceDataset?.entities ?? []).find((entity) => ids.has(String(entity.entityId))) ?? null;
+}
+
+function sourcePropertyRows(entity) {
+  if (!entity) return [];
+  const result = [];
+  for (const key of Object.keys(entity).sort()) {
+    if (key === 'properties') continue;
+    result.push([key, entity[key]]);
+  }
+  flattenProperties(entity.properties, 'properties', result);
+  return result;
+}
+
+function flattenProperties(value, prefix, result) {
+  if (value === null || value === undefined || typeof value !== 'object' || Array.isArray(value)) {
+    result.push([prefix, value]);
+    return;
+  }
+  const keys = Object.keys(value).sort();
+  if (!keys.length) {
+    result.push([prefix, value]);
+    return;
+  }
+  for (const key of keys) flattenProperties(value[key], `${prefix}.${key}`, result);
+}
+
+function descriptorMap(type) {
+  return new Map(topologyEditTableColumnsFor(type).map((descriptor) => [descriptor.key, descriptor]));
+}
+
+function orderedFieldKeys(row, descriptors) {
+  const result = [];
+  const seen = new Set();
+  for (const key of row.columnKeys ?? []) {
+    if (!seen.has(key)) { seen.add(key); result.push(key); }
+  }
+  for (const key of Object.keys(row.fields ?? {}).sort()) {
+    if (!seen.has(key) && row.fields[key] !== null && row.fields[key] !== undefined) {
+      seen.add(key); result.push(key);
+    }
+  }
+  for (const key of descriptors.keys()) {
+    if (!seen.has(key) && row.fields?.[key] !== undefined) {
+      seen.add(key); result.push(key);
+    }
+  }
+  return result;
+}
+
+function virtualAuthority(key, value) {
+  if (value === null || value === undefined) return 'UNRESOLVED';
+  return key.startsWith('delta') ? 'DERIVED_DISPLAY' : 'CANONICAL';
+}
+function capabilityText(capability) {
+  if (!capability) return 'READ_ONLY';
+  if (capability.status === 'AVAILABLE') return 'AVAILABLE';
+  return `${capability.status} — ${capability.reason}`;
+}
+function addDescriptors(target, descriptors) {
+  for (const descriptor of descriptors) if (!target.has(descriptor.key)) target.set(descriptor.key, descriptor);
+}
+function fallbackDescriptor(key) { return { key, label: humanLabel(key), valueType: 'text', readOnly: true, editor: null }; }
+function humanLabel(key) { return String(key).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_.]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()); }
+function typeRank(type) { const index = TYPE_ORDER.indexOf(type); return index < 0 ? TYPE_ORDER.length : index; }
+function typeLabel(type) { return type === 'ELBOW' ? 'BEND/ELBOW' : type; }
+function display(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)));
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}

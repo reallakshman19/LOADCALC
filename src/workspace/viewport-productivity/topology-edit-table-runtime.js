@@ -1,0 +1,327 @@
+import { TopologyStore } from '../topology-store.js';
+import { buildTopologyEditTableProjection } from '../topology-edit/table/topology-edit-table-projection.js';
+import { rebaseTopologyEditTableBatchPlan } from '../topology-edit/table/topology-edit-table-rebase.js';
+import {
+  createTopologyEditTableViewState,
+  reduceTopologyEditTableViewState,
+} from '../topology-edit/table/topology-edit-table-view-state.js';
+import { TopologyEditValidationWorkerClient } from '../topology-edit/professional/topology-edit-validation-worker-client.js';
+import {
+  handleTopologyEditTableCellInput,
+  handleTopologyEditTableCellKeyDown,
+  handleTopologyEditTableCompoundCellClick,
+  resetTopologyEditTableCellEditing,
+} from './topology-edit-table-cell-edit.js';
+import {
+  topologyEditTableEmptyRoutePhase,
+  topologyEditTableEmptyRoutePipeOptions,
+  runTopologyEditTableEmptyRouteAction,
+  writeTopologyEditTableEmptyRouteToAuthoring,
+} from './topology-edit-table-empty-route-runtime.js';
+import {
+  stageTopologyEditPipeSpecification,
+  stageTopologyEditTeeReducerRelation,
+  stageTopologyEditValveReplacement,
+} from './topology-edit-table-engineering-runtime.js';
+import { renderTopologyEditTableGrid } from './topology-edit-table-grid-view.js';
+import { stageTopologyEditTablePipeLength } from './topology-edit-table-pipe-length-runtime.js';
+import { handleTopologyEditTableScroll, initializeTopologyEditTableScrollState, resetTopologyEditTableScroll } from './topology-edit-table-scroll-runtime.js';
+import { ensureTopologyEditTableStyles } from './topology-edit-table-styles.js';
+import {
+  applyTopologyEditTableRuntime,
+  invalidateTopologyEditTablePreviewRequests,
+  previewTopologyEditTableRuntime,
+  redoTopologyEditTableRuntime,
+  requestTopologyEditTableAutoPreview,
+  undoTopologyEditTableRuntime,
+  validateTopologyEditTableRuntime,
+} from './topology-edit-table-workflow.js';
+
+const COLUMN_PROFILES = new Set([
+  'GEOMETRY', 'SPECIFICATION', 'SUPPORT', 'CONNECTIVITY', 'AUTHORITY', 'ALL',
+]);
+
+export class TopologyEditTableRuntime {
+  constructor(controller) {
+    this.controller = controller;
+    this.element = null;
+    this.coordinator = null;
+    this.projection = null;
+    this.viewState = createTopologyEditTableViewState();
+    this.columnProfile = 'GEOMETRY';
+    this.intents = [];
+    this.batch = null;
+    this.batchPlan = null;
+    this.staleResult = null;
+    this.preview = null;
+    this.validation = null;
+    this.previewGenerationRevision = 0;
+    this.autoPreviewRequest = null;
+    this.autoPreviewQueuedRequest = null;
+    this.transaction = null;
+    this.redoTransaction = null;
+    this.lastExport = null;
+    this.pending = false;
+    this.cellDrafts = new Map();
+    this.cellErrorId = null;
+    initializeTopologyEditTableScrollState(this);
+    this.emptyRouteValues = {
+      startX: '0', startY: '0', startZ: '0',
+      endX: '1000', endY: '0', endZ: '0',
+      catalogueRecordId: '',
+    };
+    this.message = 'Table is a read-only projection until an explicit edit is staged.';
+    this.error = null;
+    this.validationClient = new TopologyEditValidationWorkerClient();
+    this.onClick = (event) => this.handleClick(event);
+    this.onInput = (event) => this.handleInput(event);
+    this.onKeyDown = (event) => this.handleKeyDown(event);
+    this.onScroll = (event) => handleTopologyEditTableScroll(this, event);
+  }
+
+  mount(element) {
+    if (!element?.ownerDocument) throw new TypeError('TopologyEditTableRuntime: mount element is required.');
+    this.destroyElementOnly();
+    if (this.validationClient.destroyed) this.validationClient = new TopologyEditValidationWorkerClient();
+    this.element = element;
+    ensureTopologyEditTableStyles(element.ownerDocument);
+    element.addEventListener('click', this.onClick);
+    element.addEventListener('input', this.onInput);
+    element.addEventListener('keydown', this.onKeyDown);
+    element.addEventListener('scroll', this.onScroll, true);
+    this.refreshProjection();
+  }
+
+  setCoordinator(coordinator) { this.coordinator = coordinator; }
+
+  refreshProjection(canonical = this.controller.session?.currentTopology?.()) {
+    const dataset = this.controller.workspaceDataset;
+    const topologyGraph = TopologyStore.getGraph();
+    if (!canonical || !dataset || !topologyGraph) {
+      this.projection = null;
+      this.message = 'Canonical/source topology authority is not available yet.';
+      this.render();
+      return;
+    }
+    try {
+      this.projection = buildTopologyEditTableProjection({ canonicalTopology: canonical, dataset, topologyGraph });
+      this.error = null;
+      this.message = 'Table is an exact canonical projection. Stage an edit to begin a governed transaction.';
+      this.render();
+    } catch (error) {
+      this.error = errorMessage(error);
+      this.projection = null;
+      this.render();
+    }
+  }
+
+  canonicalChanged(canonical) {
+    const priorBatch = this.batch;
+    const priorPlan = this.batchPlan;
+    resetTopologyEditTableCellEditing(this);
+    this.clearCandidate();
+    this.lastExport = null;
+    this.refreshProjection(canonical);
+    if (!this.projection || !priorBatch || !priorPlan
+      || priorBatch.authority.priorDraftHash === canonical?.canonicalTopologyHash) return;
+    const result = rebaseTopologyEditTableBatchPlan({
+      batch: priorBatch,
+      plan: priorPlan,
+      projection: this.projection,
+      canonicalTopology: canonical,
+      sessionSnapshot: this.controller.session.snapshot(),
+    });
+    if (result.disposition === 'REBASED') {
+      this.batch = result.rebasedBatch;
+      this.batchPlan = result.rebasedPlan;
+      this.intents = [...result.rebasedBatch.intents];
+      this.staleResult = null;
+      this.message = 'Staged edits rebased safely; governed Preview refresh queued.';
+      requestTopologyEditTableAutoPreview(this);
+    } else {
+      this.batch = priorBatch;
+      this.batchPlan = priorPlan;
+      this.staleResult = result;
+      this.message = 'Staged edits conflict with the current canonical revision.';
+    }
+    this.render();
+  }
+
+  applyCanonicalSelection({ rowIds, primaryRowId = null, anchorRowId = null } = {}) {
+    this.viewState = reduceTopologyEditTableViewState(this.viewState, {
+      type: 'SELECTION', selectedRowIds: rowIds, primaryRowId, anchorRowId,
+    });
+    this.render();
+  }
+
+  phase() {
+    if (this.staleResult) return 'STALE_CONFLICT';
+    if (this.validation?.status === 'READY_TO_APPLY') return 'READY_TO_APPLY';
+    if (this.preview) return 'PREVIEW_READY';
+    if (this.batch) return 'STAGED';
+    return 'IDLE';
+  }
+
+  handleInput(event) {
+    const emptyRouteField = event.target.dataset?.emptyRouteField;
+    if (emptyRouteField) {
+      this.emptyRouteValues = {
+        ...this.emptyRouteValues,
+        [emptyRouteField]: event.target.value,
+      };
+      return;
+    }
+    if (handleTopologyEditTableCellInput(this, event)) return;
+    if (!event.target.matches?.('[data-table-filter]')) return;
+    const caret = event.target.selectionStart;
+    resetTopologyEditTableScroll(this);
+    this.viewState = reduceTopologyEditTableViewState(this.viewState, { type: 'QUERY', query: event.target.value });
+    this.render();
+    const filter = this.element?.querySelector('[data-table-filter]');
+    filter?.focus();
+    if (Number.isInteger(caret)) filter?.setSelectionRange?.(caret, caret);
+  }
+
+  handleKeyDown(event) { return handleTopologyEditTableCellKeyDown(this, event); }
+
+  handleClick(event) {
+    if (handleTopologyEditTableCompoundCellClick(this, event)) return true;
+    const select = event.target.closest?.('[data-table-select]');
+    if (select && this.element?.contains(select)) return this.selectRow(select.dataset.tableSelect, event);
+    const sort = event.target.closest?.('[data-table-sort]');
+    if (sort && this.element?.contains(sort)) return this.sortRows(sort.dataset.tableSort);
+    const profile = event.target.closest?.('[data-table-profile]');
+    if (profile && this.element?.contains(profile)) return this.setColumnProfile(profile.dataset.tableProfile);
+    const action = event.target.closest?.('[data-table-action]');
+    if (!action || !this.element?.contains(action)) return false;
+    const kind = action.dataset.tableAction;
+    if (kind === 'stage-pipe-length') return this.stagePipeLength(action.dataset.canonicalId);
+    if (kind === 'stage-pipe-specification') {
+      return stageTopologyEditPipeSpecification(this, action.dataset.canonicalId);
+    }
+    if (kind === 'stage-valve-replacement') {
+      return stageTopologyEditValveReplacement(this, action.dataset.canonicalId);
+    }
+    if (kind === 'stage-tee-reducer-relation') {
+      return stageTopologyEditTeeReducerRelation(this, action.dataset.canonicalId);
+    }
+    if (kind === 'preview') return this.previewBatch();
+    if (kind === 'validate') return this.validatePreview();
+    if (kind === 'apply') return this.applyBatch();
+    if (kind === 'discard') return this.discardStaged();
+    if (kind === 'export-csv') return this.exportCsv();
+    if (kind === 'export-xlsx') return this.exportXlsx();
+    if (kind.startsWith('empty-route-')) return this.runEmptyRouteAction(kind);
+    return false;
+  }
+
+  setColumnProfile(profileInput) {
+    const profile = String(profileInput ?? '').trim().toUpperCase();
+    if (!COLUMN_PROFILES.has(profile)) return false;
+    this.columnProfile = profile;
+    this.tableScrollLeft = 0;
+    this.render();
+    return true;
+  }
+
+  emptyRoutePipeOptions() { return topologyEditTableEmptyRoutePipeOptions(this); }
+  emptyRoutePhase() { return topologyEditTableEmptyRoutePhase(this); }
+  async runEmptyRouteAction(kind) { return runTopologyEditTableEmptyRouteAction(this, kind); }
+  writeEmptyRouteToAuthoring(authoring) {
+    return writeTopologyEditTableEmptyRouteToAuthoring(this, authoring);
+  }
+
+  selectRow(rowId, event) {
+    const action = event.ctrlKey || event.metaKey ? 'TOGGLE' : event.shiftKey ? 'ADD' : 'REPLACE';
+    this.coordinator?.tableSelection(action, [rowId], rowId);
+    return true;
+  }
+
+  sortRows(sortKey) {
+    const same = this.viewState.sortKey === sortKey;
+    const sortDirection = same && this.viewState.sortDirection === 'ASC' ? 'DESC' : 'ASC';
+    resetTopologyEditTableScroll(this);
+    this.viewState = reduceTopologyEditTableViewState(this.viewState, { type: 'SORT', sortKey, sortDirection });
+    this.render();
+    return true;
+  }
+
+  stagePipeLength(canonicalId) {
+    const result = stageTopologyEditTablePipeLength(this, {
+      canonicalId,
+      lengthMm: this.element.querySelector('[data-table-edit-length]')?.value,
+      anchor: this.element.querySelector('[data-table-edit-anchor]')?.value,
+      propagation: this.element.querySelector('[data-table-edit-propagation]')?.value,
+    });
+    if (result.ok) {
+      this.cellDrafts.delete(canonicalId);
+      this.cellErrorId = null;
+    } else {
+      this.cellErrorId = canonicalId;
+    }
+    this.render();
+    return true;
+  }
+
+  previewBatch() { return previewTopologyEditTableRuntime(this); }
+  validatePreview() { return validateTopologyEditTableRuntime(this); }
+  applyBatch() { return applyTopologyEditTableRuntime(this); }
+  undoOperation() { return undoTopologyEditTableRuntime(this); }
+  redoOperation() { return redoTopologyEditTableRuntime(this); }
+
+  exportCsv() {
+    return this.runExport('CSV', async () => {
+      const { downloadTopologyEditTableCsv } = await import('./topology-edit-table-export-download.js');
+      return downloadTopologyEditTableCsv(this);
+    });
+  }
+  exportXlsx() {
+    return this.runExport('XLSX', async () => {
+      const { downloadTopologyEditTableXlsx } = await import('./topology-edit-table-export-download.js');
+      return downloadTopologyEditTableXlsx(this);
+    });
+  }
+  async runExport(format, operation) {
+    if (this.pending) return true;
+    try {
+      this.pending = true; this.error = null;
+      const result = await operation();
+      this.lastExport = { format, exportHash: result.exportModel.exportHash, byteLength: result.byteLength };
+      this.message = `${format} exported from certified canonical ${shortHash(result.exportModel.authority.canonicalHash)}.`;
+    } catch (error) { this.error = errorMessage(error); }
+    finally { this.pending = false; this.render(); }
+    return true;
+  }
+
+  discardStaged() {
+    this.resetStaged(true);
+    this.message = 'Staged Table edits discarded; canonical authority unchanged.';
+    this.render();
+    return true;
+  }
+
+  resetStaged(clearGhost = true) {
+    invalidateTopologyEditTablePreviewRequests(this);
+    this.intents = []; this.batch = null; this.batchPlan = null; this.staleResult = null;
+    this.preview = null; this.validation = null;
+    resetTopologyEditTableCellEditing(this);
+    if (clearGhost) this.controller.viewportBackend?.clearGhost();
+  }
+  clearCandidate() {
+    invalidateTopologyEditTablePreviewRequests(this);
+    this.validationClient.cancel(); this.preview = null; this.validation = null;
+    this.controller.viewportBackend?.clearGhost();
+  }
+  render() { renderTopologyEditTableGrid(this); }
+  destroyElementOnly() {
+    this.element?.removeEventListener('click', this.onClick);
+    this.element?.removeEventListener('input', this.onInput);
+    this.element?.removeEventListener('keydown', this.onKeyDown);
+    this.element?.removeEventListener('scroll', this.onScroll, true);
+    this.element?.replaceChildren(); this.element = null;
+  }
+  destroy() { this.validationClient.destroy(); this.resetStaged(true); this.destroyElementOnly(); }
+}
+
+function errorMessage(error) { return error instanceof Error ? error.message : String(error); }
+function shortHash(value) { const text = String(value ?? ''); return text.length > 16 ? `${text.slice(0, 13)}…` : text; }

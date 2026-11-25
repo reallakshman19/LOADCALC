@@ -1,0 +1,231 @@
+/** M004 engineering-axis HUD, M005 transactional optimization and M006 orientation presentation. */
+import * as THREE from 'three';
+import { ViewportAxisHUD } from '../viewport-axis-hud.js';
+import { ENGINEERING_TO_RENDER_MATRIX4_ELEMENTS } from './topology-edit-coordinate-transform.js';
+import {
+  createTopologyEditLargeModelPolicy,
+} from './topology-edit-large-model-policy.js';
+import { createTopologyEditOrientationSnapshot } from './topology-edit-orientation-contract.js';
+import { TopologyEditOrientationCubeRuntime } from './topology-edit-orientation-cube-runtime.js';
+import { optimizeTopologyEditRenderGroups } from './topology-edit-render-optimizer.js';
+import { TopologyEditSupportViewportBackend } from './topology-edit-support-viewport-backend.js';
+
+export class TopologyEditNavigationHudViewportBackend extends TopologyEditSupportViewportBackend {
+  constructor(options = {}) {
+    super(options);
+    this.axisHud = null;
+    this.orientationCube = null;
+    this.renderOptimizationEvidence = null;
+    this.largeModelPolicy = null;
+  }
+
+  mount(host) {
+    super.mount(host);
+    try {
+      this.axisHud = new ViewportAxisHUD({ basisQuaternion: engineeringBasisQuaternion() });
+      this.orientationCube = new TopologyEditOrientationCubeRuntime();
+      this.orientationCube.mount(host);
+      this.renderer.domElement.tabIndex = 0;
+      this.invalidate('orientation-presentation-mount');
+    } catch (error) {
+      this.orientationCube?.destroy();
+      this.orientationCube = null;
+      this.axisHud?.dispose();
+      this.axisHud = null;
+      super.destroy();
+      throw error;
+    }
+  }
+
+  /**
+   * Visible endpoint affordances are exact canonical pick geometry and receive
+   * deterministic priority when the user actually hits the marker. Otherwise
+   * the established GPU-first component/body picking path remains unchanged.
+   */
+  pickAt(clientX, clientY) {
+    if (this.contextLost || this.configurationError) return null;
+    const context = this.pickContext(clientX, clientY);
+    if (!context) return null;
+
+    const endpointHit = this.pickVisibleEndpoint?.(context.pointer);
+    if (endpointHit) return endpointHit;
+
+    const gpuHit = this.gpuPicker?.pick({
+      clientX,
+      clientY,
+      rect: context.rect,
+      camera: this.activeCamera,
+    });
+    if (isExactGpuSample(gpuHit)) {
+      const point = this.resolveGpuPickPoint(
+        gpuHit,
+        gpuHit.samplePointer ?? context.pointer,
+      );
+      if (point) return this.pickReceipt(gpuHit.target, point);
+    }
+
+    const rayReceipt = this.pickWithRaycaster(context.pointer);
+    if (rayReceipt) return rayReceipt;
+    if (!gpuHit) return null;
+    const point = this.resolveGpuPickPoint(
+      gpuHit,
+      gpuHit.samplePointer ?? context.pointer,
+    );
+    return point ? this.pickReceipt(gpuHit.target, point) : null;
+  }
+
+  renderSession(model) {
+    this.applyLargeModelPolicy(model);
+    this.renderOptimizationEvidence = null;
+    super.renderSession(model);
+    this.renderOptimizationEvidence = optimizeTopologyEditRenderGroups(this.groups);
+    this.engineeringRoot.updateMatrixWorld(true);
+    this.gpuPicker?.invalidateScene?.();
+    this.invalidate('render-resource-optimization');
+  }
+
+  renderGhost(ghost, markerSize) {
+    const primitives = Array.isArray(ghost?.primitives) ? ghost.primitives : [];
+    if (!primitives.length) {
+      const result = super.renderGhost(ghost, markerSize);
+      this.gpuPicker?.invalidateScene?.();
+      return result;
+    }
+
+    this.clearGroup(this.groups.ghostGroup);
+    const resolvedMarkerSize = resolveGhostMarkerSize(markerSize, this.engineeringBounds);
+    const elements = Array.isArray(ghost?.elements) ? ghost.elements : [];
+    const segments = Array.isArray(ghost?.segments) ? ghost.segments : [];
+    const projection = { elements, segments, primitives };
+    this.renderProjection(
+      this.groups.ghostGroup,
+      projection,
+      0xf59e0b,
+      0.38,
+      resolvedMarkerSize * 1.2,
+    );
+    // Typed projection uses invisible node pick proxies. Keep the established
+    // visible ghost markers without making them engineering authority.
+    this.buildMeshGroup(
+      this.groups.ghostGroup,
+      elements.filter((row) => row?.type === 'node'),
+      0xf59e0b,
+      0.38,
+      resolvedMarkerSize * 1.2,
+    );
+    this.applySectionPlanesToGroup(this.groups.ghostGroup);
+    this.invalidate('typed-ghost-replacement');
+    this.gpuPicker?.invalidateScene?.();
+    return undefined;
+  }
+
+  clearGhost() {
+    const result = super.clearGhost();
+    this.gpuPicker?.invalidateScene?.();
+    return result;
+  }
+
+  renderIssues(overlay) {
+    const result = super.renderIssues(overlay);
+    this.gpuPicker?.invalidateScene?.();
+    return result;
+  }
+
+  clearIssues() {
+    const result = super.clearIssues();
+    this.gpuPicker?.invalidateScene?.();
+    return result;
+  }
+
+  applyLargeModelPolicy(model) {
+    const host = this.hostElement;
+    const policy = createTopologyEditLargeModelPolicy({
+      model,
+      devicePixelRatio: globalThis.devicePixelRatio,
+      viewportWidth: host?.clientWidth,
+      viewportHeight: host?.clientHeight,
+    });
+    this.largeModelPolicy = policy;
+    const currentRatio = Number(this.renderer?.getPixelRatio?.());
+    if (this.renderer && currentRatio !== policy.pixelRatio) {
+      this.renderer.setPixelRatio(policy.pixelRatio);
+      this.resize();
+    }
+    performanceEvidenceHosts(host).forEach((evidenceHost) => {
+      evidenceHost.dataset.topologyEditLargeModelTier = policy.tier;
+      evidenceHost.dataset.topologyEditRenderItemCount = String(policy.renderItemCount);
+      evidenceHost.dataset.topologyEditRequestedPixelRatio = String(policy.requestedPixelRatio);
+      evidenceHost.dataset.topologyEditAppliedPixelRatio = String(policy.pixelRatio);
+      evidenceHost.dataset.topologyEditGpuFirstPicking = String(policy.gpuFirstPicking);
+    });
+    return policy;
+  }
+
+  orientationSnapshot() {
+    if (!this.activeCamera || !this.controls) {
+      throw new Error('TOPOLOGY_EDIT_ORIENTATION_CAMERA_UNAVAILABLE: Active camera and controls are required.');
+    }
+    const direction = this.activeCamera.position.clone().sub(this.controls.target);
+    if (!(direction.lengthSq() > 1e-24)) {
+      throw new Error('TOPOLOGY_EDIT_ORIENTATION_CAMERA_DIRECTION_INVALID: Camera and target must differ.');
+    }
+    direction.normalize();
+    return createTopologyEditOrientationSnapshot({
+      projection: this.activeCamera.isOrthographicCamera ? 'ORTHOGRAPHIC' : 'PERSPECTIVE',
+      quaternion: {
+        x: this.activeCamera.quaternion.x,
+        y: this.activeCamera.quaternion.y,
+        z: this.activeCamera.quaternion.z,
+        w: this.activeCamera.quaternion.w,
+      },
+      cameraDirection: { x: direction.x, y: direction.y, z: direction.z },
+    });
+  }
+
+  renderFrame() {
+    const shouldRender = Boolean(
+      this.renderDirty && this.isMounted && this.renderer && !this.contextLost,
+    );
+    super.renderFrame();
+    if (!shouldRender || !this.hostElement || !this.activeCamera || !this.controls) return;
+    if (this.axisHud) {
+      const width = Math.max(this.hostElement.clientWidth, 1);
+      const height = Math.max(this.hostElement.clientHeight, 1);
+      this.axisHud.updateOrientation(this.activeCamera);
+      this.axisHud.render(this.renderer, width, height);
+    }
+    this.orientationCube?.update(this.orientationSnapshot());
+  }
+
+  destroy() {
+    this.orientationCube?.destroy();
+    this.orientationCube = null;
+    this.axisHud?.dispose();
+    this.axisHud = null;
+    this.renderOptimizationEvidence = null;
+    this.largeModelPolicy = null;
+    super.destroy();
+  }
+}
+
+export function engineeringBasisQuaternion() {
+  const matrix = new THREE.Matrix4().fromArray([...ENGINEERING_TO_RENDER_MATRIX4_ELEMENTS]);
+  return new THREE.Quaternion().setFromRotationMatrix(matrix).normalize();
+}
+
+function resolveGhostMarkerSize(markerSize, bounds) {
+  const explicit = Number(markerSize);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return !bounds || bounds.isEmpty()
+    ? 10
+    : Math.max(bounds.getSize(new THREE.Vector3()).length() * 0.008, 5);
+}
+
+function isExactGpuSample(hit) {
+  return Number(hit?.sample?.distanceSquared) === 0;
+}
+
+function performanceEvidenceHosts(host) {
+  const shell = host?.closest?.('[data-role="topology-edit-render-host"]');
+  return [...new Set([host, shell].filter(Boolean))];
+}

@@ -1,0 +1,213 @@
+/**
+ * Defines every configurable Project Data field used by normalization, editing,
+ * Non-FEA loads, WebGL interaction, and benchmark acceptance.
+ */
+export const PROJECT_DATA_PROFILE_SCHEMA = 'project-data-profile/v1';
+export const NON_FEA_PHASE_2_INTRODUCTION = 'NON_FEA_PHASE_2';
+
+export const PROJECT_DATA_GROUPS = Object.freeze([
+  group('sourcesAndUnits', 'Sources and units', [
+    field('lengthUnit', 'Length unit', 'text', 'Normalization'),
+    field('sourceUpAxis', 'Source up axis', 'text', 'Normalization'),
+    field('coordinateTransform', 'Rendering coordinate transform', 'json', 'Rendering'),
+    field('datasetSource', 'SJSON source', 'source', 'Normalization'),
+    field('lineListSource', 'Line-list source', 'source', 'Loads'),
+    field('pipingClassSource', 'Piping-class source', 'source', 'Loads'),
+    field('componentWeightSource', 'Component-weight source', 'source', 'Editing and loads'),
+  ]),
+  group('topology', 'Topology', [
+    field('portMatchToleranceMm', 'Port-match tolerance', 'number', 'mm'),
+    field('supportSiteGroupingToleranceMm', 'Support-site grouping tolerance', 'number', 'mm'),
+    field('autoCarrierCoincidenceToleranceMm', 'AUTO-carrier coincidence tolerance', 'number', 'mm'),
+    field('routeJoiningRules', 'Route-joining rules', 'json', 'Topology'),
+    field('supportTypeCapabilities', 'Support-type capability mapping', 'json', 'Loads'),
+    field('pipingClassMappings', 'Approved piping-class mappings', 'json', 'Master matching'),
+  ]),
+  group('editing', 'Editing', [
+    field('snapToleranceMm', 'Snap tolerance', 'number', 'mm'),
+    field('connectionToleranceMm', 'Connection tolerance', 'number', 'mm'),
+    field('dimensionSourcePrecedence', 'Dimension-source precedence', 'json', 'Editing'),
+    field('componentCatalogSelection', 'Component catalog selection', 'json', 'Editing'),
+  ]),
+  group('loadCalculation', 'Load calculation', [
+    field('gravityMPerS2', 'Gravity', 'number', 'm/s²'),
+    field('loadFactor', 'Load factor', 'number', 'ratio'),
+    phase2Field('gravityMethod', 'Gravity distribution method', 'text', 'Method selection'),
+    phase2Field('componentCogFallback', 'Component CoG fallback', 'text', 'Application-point policy'),
+    field('materialDensitiesKgPerM3', 'Material densities', 'json', 'kg/m³'),
+    field('pipeSectionProperties', 'Pipe section properties', 'json', 'Geometry and loads'),
+    field('operatingFluidDensitiesKgPerM3', 'Operating fluid densities', 'json', 'kg/m³'),
+    field('hydroFluidDensitiesKgPerM3', 'Hydro fluid densities', 'json', 'kg/m³'),
+    field('insulationDensitiesKgPerM3', 'Insulation densities by code', 'json', 'kg/m³'),
+    field('componentWeightsKg', 'Approved component weights', 'json', 'kg'),
+    phase2Field('componentOperatingFluidWeightsKg', 'Component operating contained-fluid masses', 'json', 'kg'),
+    phase2Field('componentHydroFluidWeightsKg', 'Component hydrotest contained-fluid masses', 'json', 'kg'),
+    phase2Field('componentMassCompositionPolicy', 'Component dry-mass composition policy', 'json', 'Loads'),
+    phase2Field('forceOutputConvention', 'Force output convention', 'text', 'Gravity result policy'),
+    phase2Field('momentOutputConvention', 'Moment output convention', 'text', 'Gravity result policy'),
+    phase2Field('analysisBasis', 'Gravity analysis basis', 'text', 'Gravity result policy'),
+    phase2Field('resultSignConvention', 'Gravity result sign convention', 'text', 'Gravity result policy'),
+    field('equilibriumTolerances', 'Equilibrium tolerances', 'json', 'Loads'),
+    field('activeLoadCases', 'Active load cases', 'json', 'Loads'),
+  ]),
+  group('thermoMechanicalBasis', 'Thermo-mechanical basis', [
+    phase2Field('installationTemperatureC', 'Installation temperature', 'number', '°C', 'SIGNED'),
+    phase2Field('operatingTemperaturesC', 'Operating temperatures by load case or line', 'json', '°C', 'SIGNED'),
+    phase2Field('casePressuresPa', 'Pressure by load case or line', 'json', 'Pa'),
+    phase2Field('corrosionAllowancesMm', 'Corrosion allowance by class or line', 'json', 'mm'),
+    phase2Field('materialElasticProperties', 'Elastic modulus and thermal expansion properties', 'json', 'Material policy'),
+    phase2Field('stressCodeBasis', 'Stress-code basis', 'json', 'Sustained stress policy'),
+    phase2Field('pressureBoundarySemantics', 'Pressure-boundary and effective-area semantics', 'json', 'Pressure load policy'),
+    phase2Field('fluidPhaseAndFillState', 'Fluid phase and fill-state policy', 'json', 'Load-case content policy'),
+  ]),
+  group('restraintPolicy', 'Restraint and contact policy', [
+    phase2Field('restraintStiffnessNPerM', 'Restraint stiffness', 'json', 'N/m'),
+    phase2Field('restraintGapsMm', 'Restraint gaps', 'json', 'mm'),
+    phase2Field('restraintPreloadsN', 'Restraint preloads', 'json', 'N', 'SIGNED'),
+    phase2Field('frictionCoefficients', 'Friction coefficients', 'json', 'ratio'),
+    phase2Field('contactPolicy', 'Contact and unilateral behavior policy', 'json', 'Nonlinear restraint policy'),
+  ]),
+  group('qualificationPolicy', 'Qualification and configured defaults', [
+    phase2Field('configuredDefaults', 'Configured default policy', 'json', 'Explicit field-specific defaults', 'SIGNED'),
+    phase2Field('qualificationProfiles', 'Qualification profiles', 'json', 'Method qualification authority', 'SIGNED'),
+    phase2Field('nonlinearApplicabilityPolicy', 'Nonlinear applicability policy', 'json', 'Contact and operating-method restrictions'),
+    phase2Field('superpositionPolicy', 'Superposition policy', 'json', 'Combined operating reaction restrictions'),
+  ]),
+  group('webglNavigation', 'WebGL and navigation', [
+    field('supportMarkerSize', 'Support marker size', 'number', 'model units'),
+    field('pickingRadius', 'Picking radius', 'number', 'model mm'),
+    field('cameraFitMargin', 'Camera fit margin', 'number', 'ratio'),
+    field('clickTimingMs', 'Click timing', 'number', 'ms'),
+    field('doubleClickTimingMs', 'Double-click timing', 'number', 'ms'),
+    field('clickTravelTolerancePx', 'Click travel tolerance', 'number', 'pixels'),
+    field('zoomRate', 'Zoom rate', 'number', 'ratio'),
+    field('navigationSensitivity', 'Navigation sensitivity', 'number', 'ratio'),
+    field('perspectiveFovDeg', 'Perspective field of view', 'number', 'degrees'),
+    field('meshRadialSegments', 'Round-mesh radial segments', 'number', 'count'),
+    field('cameraNearMm', 'Camera near plane', 'number', 'model mm'),
+    field('cameraFarMm', 'Camera far plane', 'number', 'model mm'),
+  ]),
+  group('benchmark', 'Benchmark acceptance', [
+    field('targetBrowsers', 'Target browsers', 'json', 'Qualification'),
+    field('webglReadyMaxMs', 'WebGL ready maximum', 'number', 'ms'),
+    field('selectionP95MaxMs', 'Selection p95 maximum', 'number', 'ms'),
+    field('editCommitMaxMs', 'Edit commit maximum', 'number', 'ms'),
+    field('navigationMinFps', 'Navigation minimum', 'number', 'fps'),
+  ]),
+]);
+
+export const PROJECT_DATA_REQUIREMENTS = Object.freeze({
+  normalization: Object.freeze([
+    'sourcesAndUnits.lengthUnit', 'sourcesAndUnits.sourceUpAxis',
+    'sourcesAndUnits.coordinateTransform', 'sourcesAndUnits.datasetSource',
+  ]),
+  topology: Object.freeze([
+    'topology.portMatchToleranceMm', 'topology.supportSiteGroupingToleranceMm',
+    'topology.autoCarrierCoincidenceToleranceMm', 'topology.routeJoiningRules',
+    'topology.supportTypeCapabilities',
+  ]),
+  loadCalcProjectBasis: Object.freeze([
+    'loadCalculation.gravityMPerS2', 'loadCalculation.loadFactor',
+    'loadCalculation.equilibriumTolerances',
+    'loadCalculation.activeLoadCases',
+    'loadCalculation.componentMassCompositionPolicy',
+    'loadCalculation.forceOutputConvention',
+    'loadCalculation.momentOutputConvention',
+    'loadCalculation.analysisBasis',
+    'loadCalculation.resultSignConvention',
+    'thermoMechanicalBasis.fluidPhaseAndFillState',
+  ]),
+  editing: Object.freeze([
+    'editing.snapToleranceMm', 'editing.connectionToleranceMm',
+    'editing.dimensionSourcePrecedence', 'editing.componentCatalogSelection',
+    'sourcesAndUnits.componentWeightSource',
+  ]),
+  loads: Object.freeze([
+    'sourcesAndUnits.lineListSource', 'sourcesAndUnits.pipingClassSource',
+    'sourcesAndUnits.componentWeightSource', 'loadCalculation.gravityMPerS2',
+    'loadCalculation.loadFactor', 'loadCalculation.materialDensitiesKgPerM3',
+    'loadCalculation.pipeSectionProperties',
+    'loadCalculation.operatingFluidDensitiesKgPerM3',
+    'loadCalculation.hydroFluidDensitiesKgPerM3',
+    'loadCalculation.insulationDensitiesKgPerM3',
+    'loadCalculation.componentWeightsKg', 'loadCalculation.equilibriumTolerances',
+    'loadCalculation.activeLoadCases',
+  ]),
+  authorizedGravityLoads: Object.freeze([
+    'loadCalculation.gravityMPerS2', 'loadCalculation.loadFactor',
+    'loadCalculation.materialDensitiesKgPerM3', 'loadCalculation.pipeSectionProperties',
+    'loadCalculation.operatingFluidDensitiesKgPerM3',
+    'loadCalculation.hydroFluidDensitiesKgPerM3',
+    'loadCalculation.insulationDensitiesKgPerM3', 'loadCalculation.componentWeightsKg',
+    'loadCalculation.equilibriumTolerances', 'loadCalculation.activeLoadCases',
+    'loadCalculation.componentMassCompositionPolicy',
+    'loadCalculation.forceOutputConvention',
+    'loadCalculation.momentOutputConvention',
+    'loadCalculation.analysisBasis',
+    'loadCalculation.resultSignConvention',
+    'thermoMechanicalBasis.fluidPhaseAndFillState',
+  ]),
+  nonFeaPolicy: Object.freeze([
+    'loadCalculation.componentCogFallback',
+    'loadCalculation.componentMassCompositionPolicy',
+    'loadCalculation.forceOutputConvention',
+    'loadCalculation.momentOutputConvention',
+    'loadCalculation.analysisBasis',
+    'loadCalculation.resultSignConvention',
+    'thermoMechanicalBasis.installationTemperatureC',
+    'thermoMechanicalBasis.operatingTemperaturesC',
+    'thermoMechanicalBasis.casePressuresPa',
+    'thermoMechanicalBasis.corrosionAllowancesMm',
+    'thermoMechanicalBasis.materialElasticProperties',
+    'thermoMechanicalBasis.stressCodeBasis',
+    'thermoMechanicalBasis.pressureBoundarySemantics',
+    'thermoMechanicalBasis.fluidPhaseAndFillState',
+    'restraintPolicy.restraintStiffnessNPerM',
+    'restraintPolicy.restraintGapsMm',
+    'restraintPolicy.restraintPreloadsN',
+    'restraintPolicy.frictionCoefficients',
+    'restraintPolicy.contactPolicy',
+    'qualificationPolicy.configuredDefaults',
+    'qualificationPolicy.qualificationProfiles',
+    'qualificationPolicy.nonlinearApplicabilityPolicy',
+    'qualificationPolicy.superpositionPolicy',
+  ]),
+  webgl: Object.freeze([
+    'webglNavigation.supportMarkerSize', 'webglNavigation.pickingRadius',
+    'webglNavigation.cameraFitMargin', 'webglNavigation.clickTimingMs',
+    'webglNavigation.doubleClickTimingMs', 'webglNavigation.clickTravelTolerancePx', 'webglNavigation.zoomRate',
+    'webglNavigation.navigationSensitivity',
+    'webglNavigation.perspectiveFovDeg', 'webglNavigation.meshRadialSegments',
+    'webglNavigation.cameraNearMm', 'webglNavigation.cameraFarMm',
+  ]),
+  benchmark: Object.freeze([
+    'benchmark.targetBrowsers', 'benchmark.webglReadyMaxMs',
+    'benchmark.selectionP95MaxMs', 'benchmark.editCommitMaxMs',
+    'benchmark.navigationMinFps',
+  ]),
+});
+
+export function projectDataFieldDefinition(path) {
+  const [groupKey, fieldKey] = String(path || '').split('.');
+  const groupRow = PROJECT_DATA_GROUPS.find((row) => row.key === groupKey);
+  return groupRow?.fields.find((row) => row.key === fieldKey) || null;
+}
+
+function group(key, label, fields) {
+  return Object.freeze({ key, label, fields: Object.freeze(fields) });
+}
+
+function phase2Field(key, label, inputType, usage, numericPolicy = 'NON_NEGATIVE') {
+  return field(key, label, inputType, usage, { numericPolicy, introducedIn: NON_FEA_PHASE_2_INTRODUCTION });
+}
+
+function field(key, label, inputType, usage, options = {}) {
+  return Object.freeze({
+    key,
+    label,
+    inputType,
+    usage,
+    numericPolicy: options.numericPolicy || 'NON_NEGATIVE',
+    introducedIn: options.introducedIn || null,
+  });
+}

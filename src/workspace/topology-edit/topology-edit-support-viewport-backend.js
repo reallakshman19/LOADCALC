@@ -1,0 +1,158 @@
+/** M003 support/restraint glyph materialization layered on the M002 typed viewport. */
+import * as THREE from 'three';
+import { materializeTopologyEditSupportOverlay } from './topology-edit-support-glyph-geometry.js';
+import { TopologyEditReachableTypedViewportBackend } from './topology-edit-reachable-typed-viewport-backend.js';
+
+export const TOPOLOGY_EDIT_SUPPORT_RENDER_STYLES = Object.freeze({
+  RICH_ENGINEERING_GLYPH: 'RICH_ENGINEERING_GLYPH',
+  TOPO_VALIDATOR_COMPACT: 'TOPO_VALIDATOR_COMPACT',
+});
+
+const SUPPORT_GHOST_COLOR = 0xf59e0b;
+const SUPPORT_GHOST_OPACITY = 0.38;
+
+export class TopologyEditSupportViewportBackend extends TopologyEditReachableTypedViewportBackend {
+  renderSession(model) {
+    const supports = model?.supports;
+    if (
+      supports?.renderStyle === TOPOLOGY_EDIT_SUPPORT_RENDER_STYLES.TOPO_VALIDATOR_COMPACT
+      || !Array.isArray(supports?.glyphOverlays)
+    ) {
+      return super.renderSession(model);
+    }
+    return super.renderSession({
+      ...model,
+      supports: supportEngineeringBoundsProjection(supports),
+    });
+  }
+
+  renderProjection(group, projection, colorHex, opacity, markerSize) {
+    if (group !== this.groups.supportGroup || !Array.isArray(projection?.glyphOverlays)) {
+      return super.renderProjection(group, projection, colorHex, opacity, markerSize);
+    }
+    if (projection.renderStyle === TOPOLOGY_EDIT_SUPPORT_RENDER_STYLES.TOPO_VALIDATOR_COMPACT) {
+      return super.renderProjection(
+        group,
+        projection,
+        colorHex,
+        opacity,
+        compactSupportMarkerRadius(projection, markerSize),
+      );
+    }
+    return this.renderSupportGlyphProjection(group, projection);
+  }
+
+  renderGhost(ghost, markerSize) {
+    const supportProjection = ghost?.engineeringSupportProjection ?? null;
+    if (!supportProjection) return super.renderGhost(ghost, markerSize);
+    const result = super.renderGhost({
+      ...ghost,
+      engineeringSupportProjection: null,
+    }, markerSize);
+    this.appendEngineeringSupportGhostProjection(supportProjection);
+    return result;
+  }
+
+  appendEngineeringSupportGhostProjection(projection) {
+    if (!Array.isArray(projection?.glyphOverlays)) {
+      throw new TypeError(
+        'TopologyEditSupportViewportBackend: engineering support ghost projection requires glyphOverlays.',
+      );
+    }
+    this.renderSupportGlyphProjection(this.groups.ghostGroup, projection);
+    applySupportGhostPresentation(this.groups.ghostGroup);
+    this.applySectionPlanesToGroup(this.groups.ghostGroup);
+    this.engineeringRoot.updateMatrixWorld(true);
+    this.invalidate('engineering-support-ghost');
+  }
+
+  renderSupportGlyphProjection(group, projection) {
+    const overlays = projection.glyphOverlays;
+    const governedMarkerSize = supportMarkerSize(
+      this.navigationConfiguration?.supportMarkerSize,
+      projection,
+    );
+    const staging = new THREE.Group();
+    const bounds = new THREE.Box3();
+    try {
+      for (const overlay of overlays) {
+        const result = materializeTopologyEditSupportOverlay(overlay, {
+          markerSize: governedMarkerSize,
+          radialSegments: this.navigationConfiguration.meshRadialSegments,
+        });
+        staging.add(result.object);
+        bounds.union(result.bounds);
+      }
+    } catch (error) {
+      disposeStaging(staging);
+      throw error;
+    }
+    while (staging.children.length) group.add(staging.children[0]);
+    this.applySectionPlanesToGroup(group);
+    return bounds;
+  }
+}
+
+export function supportEngineeringBoundsProjection(projection) {
+  return Object.freeze({
+    ...projection,
+    elements: Array.isArray(projection?.elements) ? projection.elements : [],
+    segments: Object.freeze([]),
+  });
+}
+
+function compactSupportMarkerRadius(projection, fallbackMarkerSize) {
+  const explicit = Number(projection?.compactMarkerRadiusMm);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const fallback = Number(fallbackMarkerSize);
+  if (Number.isFinite(fallback) && fallback > 0) return Math.max(fallback * 0.18, 1);
+  throw new Error(
+    'TOPOLOGY_EDIT_COMPACT_SUPPORT_MARKER_POLICY_MISSING: A positive compact marker radius is required.',
+  );
+}
+
+function supportMarkerSize(configuredValue, projection) {
+  const configured = Number(configuredValue);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    throw new Error(
+      'TOPOLOGY_EDIT_SUPPORT_MARKER_POLICY_MISSING: Project Data supportMarkerSize is required.',
+    );
+  }
+  const projected = [...new Set((projection.elements || [])
+    .filter((row) => row?.type === 'SUPPORT')
+    .map((row) => Number(row.sizeMm))
+    .filter((value) => Number.isFinite(value) && value > 0))];
+  if (projected.some((value) => value !== configured)) {
+    throw new Error(
+      'TOPOLOGY_EDIT_SUPPORT_MARKER_POLICY_CONFLICT: Projection and Project Data marker sizes differ.',
+    );
+  }
+  return configured;
+}
+
+function applySupportGhostPresentation(group) {
+  const materials = new Set();
+  group.traverse((object) => {
+    if (object?.userData?.pickProxy) return;
+    const rows = Array.isArray(object?.material) ? object.material : [object?.material];
+    rows.filter(Boolean).forEach((material) => materials.add(material));
+  });
+  materials.forEach((material) => {
+    material.color?.setHex?.(SUPPORT_GHOST_COLOR);
+    material.transparent = true;
+    material.opacity = SUPPORT_GHOST_OPACITY;
+    material.needsUpdate = true;
+  });
+}
+
+function disposeStaging(root) {
+  const geometries = new Set();
+  const materials = new Set();
+  root.traverse((object) => {
+    if (object.geometry) geometries.add(object.geometry);
+    const rows = Array.isArray(object.material) ? object.material : [object.material];
+    rows.filter(Boolean).forEach((material) => materials.add(material));
+  });
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
+}

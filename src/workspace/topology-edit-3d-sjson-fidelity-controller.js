@@ -1,0 +1,273 @@
+import * as THREE from 'three';
+import {
+  TopologyEdit3DViewController as ProfessionalController,
+} from './topology-edit-3d-productivity-controller.js';
+import { EVENT_TOPICS } from './event-topics.js';
+import { SupportRestraintStore } from './support-restraint-store.js';
+import { semanticHash } from '../core/shared-piping-model/index.js';
+import {
+  buildCanonicalTopologyFromWorkspaceDataset as buildDispatchedCanonicalTopology,
+} from './topology-edit/topology-edit-source-adapter-dispatch.js';
+import {
+  enrichCanonicalSupportsWithExactOrigins,
+} from './topology-edit/topology-edit-sjson-visual-authority.js';
+import { deriveSjsonCompleteVisualGeometry } from './topology-edit/topology-edit-sjson-parent-branch-diameter.js';
+import {
+  adaptSjsonVisualToGovernedEditDraftProjection,
+} from './topology-edit/topology-edit-sjson-governed-projection-v2.js';
+import {
+  TopologyEditSjsonGovernedViewportBackend,
+} from './topology-edit/topology-edit-sjson-governed-viewport-backend-v2.js';
+import {
+  applySjsonBenchmarkCameraFit,
+  deriveGovernedSjsonSupportBundle,
+  isGovernedSjsonEditDraftSourceHash,
+} from './topology-edit/topology-edit-sjson-runtime-authority-v2.js';
+import { publishSjsonFidelityEvidence } from './topology-edit/topology-edit-sjson-fidelity-evidence-v2.js';
+import {
+  finiteInput,
+  publishSourceVisualCacheEvidence,
+  setChecked,
+  setInput,
+  setOutput,
+  sjsonDisplayControlsMarkup,
+} from './topology-edit-3d-sjson-fidelity-dom.js';
+
+export class TopologyEdit3DViewController extends ProfessionalController {
+  constructor(eventBus, lifecycleOptions = {}) {
+    super(eventBus, {
+      publishLfeaSourceContext: (payload) => {
+        eventBus.publish(EVENT_TOPICS.TOPOLOGY_EDIT_LFEA_SOURCE_CHANGED, payload);
+      },
+      ...lifecycleOptions,
+    });
+    this.sjsonVisualByRole = new Map();
+    this.sjsonBenchmarkView = null;
+    this.sjsonSupportBundle = null;
+    this.sjsonSourceVisualCache = null;
+    this.sjsonSourceVisualCacheDataset = null;
+    this.sjsonSourceVisualCacheKey = '';
+  }
+
+  async activate() {
+    await super.activate();
+    this.syncSjsonDisplayControls();
+  }
+
+  createViewportBackend() {
+    return new TopologyEditSjsonGovernedViewportBackend();
+  }
+
+  buildShell() {
+    super.buildShell();
+    const displayBody = this.hostElement?.querySelector(
+      '[data-panel-kind="display"] .topology-edit-clean-shell__panel-body',
+    );
+    if (!displayBody) {
+      throw new Error('TOPOLOGY_EDIT_SJSON_DISPLAY_CONTROL_HOST_MISSING');
+    }
+    displayBody.insertAdjacentHTML('beforeend', sjsonDisplayControlsMarkup());
+  }
+
+  handleHostClick(event) {
+    if (event.target.closest('[data-action="apply-sjson-display-controls"]')) {
+      return this.applySjsonDisplayControls();
+    }
+    return super.handleHostClick(event);
+  }
+
+  handleViewportSelection(pick, event) {
+    const result = super.handleViewportSelection(pick, event);
+    const panelKind = pick?.objectKind === 'node'
+      ? 'topology-edit-professional-interaction'
+      : ['component', 'edge'].includes(pick?.objectKind)
+        ? 'topology-edit-professional-operation'
+        : null;
+    if (panelKind) {
+      const panel = this.hostElement?.querySelector(`[data-panel-kind="${panelKind}"]`);
+      if (panel) panel.open = true;
+    }
+    return result;
+  }
+
+  applySjsonDisplayControls() {
+    const host = this.hostElement?.querySelector('[data-role="sjson-display-controls"]');
+    if (!host || !this.viewportBackend) return null;
+    try {
+      const nodeRadiusMm = finiteInput(host, 'sjson-node-radius-mm');
+      const nearMm = finiteInput(host, 'sjson-camera-near-mm');
+      const farMm = finiteInput(host, 'sjson-camera-far-mm');
+      const auto = host.querySelector('[data-role="sjson-camera-auto-clipping"]')?.checked !== false;
+      this.viewportBackend.setGovernedNodeMarkerRadiusMm(nodeRadiusMm);
+      const clipping = this.viewportBackend.setGovernedCameraClippingPolicy({
+        mode: auto ? 'AUTO' : 'MANUAL',
+        nearMm,
+        farMm,
+      });
+      setOutput(host, `Node radius ${nodeRadiusMm} mm; ${clipping.mode.toLowerCase()} clipping ${clipping.appliedNearMm.toFixed(3)}–${clipping.appliedFarMm.toFixed(1)} mm.`);
+      this.setStatus('SJSON display controls applied.');
+      this.syncSjsonDisplayControls();
+      return clipping;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setOutput(host, message);
+      this.setStatus(`SJSON display controls rejected: ${message}`);
+      return null;
+    }
+  }
+
+  syncSjsonDisplayControls() {
+    const host = this.hostElement?.querySelector('[data-role="sjson-display-controls"]');
+    const backend = this.viewportBackend;
+    if (!host || !backend) return;
+    setInput(host, 'sjson-node-radius-mm', backend.governedNodeMarkerRadiusMm);
+    const policy = backend.governedCameraClippingPolicy;
+    setChecked(host, 'sjson-camera-auto-clipping', policy?.mode !== 'MANUAL');
+    setInput(host, 'sjson-camera-near-mm', policy?.nearMm);
+    setInput(host, 'sjson-camera-far-mm', policy?.farMm);
+    const snapshot = backend.governedCameraClippingSnapshot?.();
+    if (snapshot) {
+      setOutput(host, `Node radius ${backend.governedNodeMarkerRadiusMm} mm; ${snapshot.mode.toLowerCase()} clipping ${snapshot.appliedNearMm.toFixed(3)}–${snapshot.appliedFarMm.toFixed(1)} mm.`);
+    }
+  }
+
+  buildWorkspaceCanonical(dataset, graph) {
+    const attachmentModel = SupportRestraintStore.getAttachmentModel();
+    const canonical = buildDispatchedCanonicalTopology(
+      dataset,
+      graph,
+      attachmentModel,
+      SupportRestraintStore.getRestraintModel(),
+    );
+    if (!this.isGovernedSjsonCanonical(canonical)) return canonical;
+    return enrichCanonicalSupportsWithExactOrigins(canonical, dataset, attachmentModel);
+  }
+
+  deriveVisual(canonical, modelRole) {
+    if (!this.isGovernedSjsonCanonical(canonical)) {
+      return super.deriveVisual(canonical, modelRole);
+    }
+    const role = String(modelRole || 'DRAFT').toUpperCase();
+    const cacheKey = `${String(canonical?.sourceHash || '')}:${String(canonical?.canonicalTopologyHash || '')}`;
+    if (
+      role === 'SOURCE'
+      && this.sjsonSourceVisualCache
+      && this.sjsonSourceVisualCacheDataset === this.workspaceDataset
+      && this.sjsonSourceVisualCacheKey === cacheKey
+    ) {
+      const cachedResult = this.decorateAuthoringVisualResult(
+        this.sjsonSourceVisualCache,
+        canonical,
+        role,
+      );
+      this.sjsonVisualByRole.set(role, cachedResult);
+      publishSourceVisualCacheEvidence(this.hostElement, 'HIT');
+      return cachedResult;
+    }
+    const governedResult = adaptSjsonVisualToGovernedEditDraftProjection({
+      visualResult: deriveSjsonCompleteVisualGeometry({
+        canonicalTopology: canonical,
+        dataset: this.workspaceDataset,
+        modelRole,
+      }),
+      dataset: this.workspaceDataset,
+    });
+    // Decorate the exact governed packet before any role cache, support bundle,
+    // or renderer consumes it. This keeps authored bends inside the sole SJSON
+    // render authority rather than publishing presentation-only side evidence.
+    const result = this.decorateAuthoringVisualResult(
+      governedResult,
+      canonical,
+      role,
+    );
+    this.sjsonVisualByRole.set(role, result);
+    if (role === 'SOURCE') {
+      this.sjsonSourceVisualCache = result;
+      this.sjsonSourceVisualCacheDataset = this.workspaceDataset;
+      this.sjsonSourceVisualCacheKey = cacheKey;
+      publishSourceVisualCacheEvidence(this.hostElement, 'MISS');
+    }
+    if (role === 'DRAFT') {
+      this.sjsonSupportBundle = deriveGovernedSjsonSupportBundle({
+        canonical,
+        dataset: this.workspaceDataset,
+        draftVisual: result,
+        backend: this.viewportBackend,
+      });
+      this.viewportBackend?.setGovernedSupportProjection(
+        this.sjsonSupportBundle.supportProjection,
+      );
+    }
+    return result;
+  }
+
+  refreshView(canonical) {
+    this.sjsonSupportBundle = null;
+    this.viewportBackend?.setGovernedSupportProjection(null);
+    if (!this.isGovernedSjsonCanonical(canonical)) {
+      this.sjsonVisualByRole.clear();
+      this.sjsonBenchmarkView = null;
+      return super.refreshView(canonical);
+    }
+    super.refreshView(canonical);
+
+    const bundle = this.sjsonSupportBundle;
+    const draftVisual = this.sjsonVisualByRole.get('DRAFT');
+    if (!bundle || !draftVisual) {
+      throw new Error(
+        'TOPOLOGY_EDIT_SJSON_SINGLE_RENDER_PACKET_MISSING: Draft visual and support authority are required.',
+      );
+    }
+    this.sjsonBenchmarkView = applySjsonBenchmarkCameraFit(this.viewportBackend);
+    this.visualDiagnostics = [
+      ...(draftVisual.model?.diagnostics || []),
+      ...bundle.overlays.flatMap((row) => row.diagnostics || []),
+      ...bundle.overlays.flatMap((row) => (
+        (row.restraints || []).flatMap((restraint) => restraint.diagnostics || [])
+      )),
+    ];
+    this.visualModelHash = semanticHash({
+      draftVisualGeometryHash: draftVisual.model?.visualGeometryHash || '',
+      editDraftMetrics: draftVisual.editDraftMetrics || null,
+      supportProjection: bundle.supportProjection,
+      supportAuthorityHash: bundle.supportAuthority.authorityHash,
+      supportMetrics: bundle.supportAuthority.metrics,
+      supportDiameterIndexHash: bundle.supportTopology.supportVisualDiameterIndexHash || '',
+      supportDiameterAdaptations: bundle.supportTopology.supportVisualDiameterAdaptations || [],
+      benchmarkView: this.sjsonBenchmarkView,
+      singleRenderPacket: true,
+    });
+    this.updatePresentationBasis(canonical);
+    this.presentationRuntime?.apply(this.presentationState);
+    this.renderCheckerPanel();
+    publishSjsonFidelityEvidence({
+      host: this.canvasMount,
+      canonical,
+      supportProjection: bundle.supportProjection,
+      visualResult: draftVisual,
+      supportTopology: bundle.supportTopology,
+      supportAuthority: bundle.supportAuthority,
+      benchmarkView: this.sjsonBenchmarkView,
+      visualModelHash: this.visualModelHash,
+      journalHash: this.session?.journal?.journalHash || '',
+    });
+    this.syncSjsonDisplayControls();
+  }
+
+  isGovernedSjsonCanonical(canonical) {
+    const baseSourceHash = this.session?.baseCanonicalTopology?.sourceHash;
+    return isGovernedSjsonEditDraftSourceHash(canonical?.sourceHash)
+      || isGovernedSjsonEditDraftSourceHash(baseSourceHash);
+  }
+
+  deactivate() {
+    this.viewportBackend?.setGovernedSupportProjection(null);
+    this.sjsonVisualByRole.clear();
+    this.sjsonBenchmarkView = null;
+    this.sjsonSupportBundle = null;
+    this.sjsonSourceVisualCache = null;
+    this.sjsonSourceVisualCacheDataset = null;
+    this.sjsonSourceVisualCacheKey = '';
+    super.deactivate();
+  }
+}

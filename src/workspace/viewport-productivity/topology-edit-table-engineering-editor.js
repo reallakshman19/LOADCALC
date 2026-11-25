@@ -1,0 +1,239 @@
+import {
+  deriveTopologyEditTableNodePositionCapability,
+} from '../topology-edit/table/topology-edit-table-edit-capability.js';
+import {
+  topologyEditTablePipeSpecificationCandidates,
+  topologyEditTablePipeSpecificationCatalogueLabel,
+} from '../topology-edit/table/topology-edit-table-pipe-catalogue.js';
+import {
+  topologyEditTableValveCatalogueCandidates,
+  topologyEditTableValveCatalogueLabel,
+} from '../topology-edit/table/topology-edit-table-valve-catalogue.js';
+
+const EDITABLE_TYPES = new Set(['PIPE', 'VALVE', 'TEE']);
+
+export function renderTopologyEditTableEngineeringEditor(
+  row,
+  stagedIntents,
+  projection,
+  catalogue = null,
+  canonicalTopology = null,
+) {
+  if (!EDITABLE_TYPES.has(row?.elementType)) return '';
+  if (row.elementType === 'PIPE' && row.identity?.canonicalKind === 'EDGE') {
+    return pipeEditor(row, stagedIntents, catalogue, canonicalTopology);
+  }
+  if (row.elementType === 'VALVE' && row.identity?.canonicalKind === 'EDGE') {
+    return valveEditor(row, stagedIntents, catalogue);
+  }
+  if (row.elementType === 'TEE' && row.identity?.canonicalKind === 'JUNCTION') {
+    return teeReducerEditor(row, stagedIntents, projection);
+  }
+  return '';
+}
+
+export function renderTopologyEditTableNodePositionEditor(row, stagedIntent, runtime) {
+  if (row?.identity?.canonicalKind !== 'EDGE') return '';
+  const topology = runtime?.controller?.session?.currentTopology?.();
+  if (!topology || !runtime?.projection) return '';
+  const panels = ['FROM', 'TO'].map((endpoint) => nodeEndpointEditor(
+    row,
+    stagedIntent,
+    runtime,
+    topology,
+    endpoint,
+  )).join('');
+  return `<section class="topology-edit-table__editor" data-table-node-position-editor="${esc(row.identity.canonicalId)}">
+    <div class="topology-edit-table__identity"><strong>Certified node position</strong><code>${esc(row.identity.canonicalId)}</code><span>MOVE_NODE / CONNECTED_RUN</span></div>
+    <p class="topology-edit-table__notice">Coordinates are staged as an explicit engineering operation. NODE_ONLY moves the exact endpoint node; CONNECTED_RUN translates the plain connected run on that side of this edge. Junction/support/boundary/rigid/bend dependants fail closed until their own policies are certified.</p>
+    <div class="topology-edit-table__editor-grid">${panels}</div>
+  </section>`;
+}
+
+export function describeTopologyEditTableIntent(intent) {
+  if (intent?.intentKind === 'PIPE_LENGTH') {
+    return `length ${display(intent.priorValue?.lengthMm)} → ${display(intent.requestedValue?.lengthMm)} mm · ${display(intent.geometryPolicy?.anchor)} / ${display(intent.geometryPolicy?.propagation)}`;
+  }
+  if (intent?.intentKind === 'PIPE_SPECIFICATION') {
+    const binding = intent.requestedValue?.catalogueBinding ?? {};
+    return `spec record ${display(intent.priorValue?.catalogueRecordId)} → ${display(binding.recordId)} · DN ${display(binding.nominalSizeMm)} · ${display(binding.schedule)} · ${display(binding.materialSpecification)} · ${display(binding.pipingClass)}`;
+  }
+  if (intent?.intentKind === 'NODE_POSITION') {
+    const prior = intent.priorValue?.position ?? {};
+    const next = intent.requestedValue?.position ?? {};
+    return `${display(intent.requestedValue?.endpoint)} node ${display(intent.requestedValue?.nodeId)} · (${display(prior.x)}, ${display(prior.y)}, ${display(prior.z)}) → (${display(next.x)}, ${display(next.y)}, ${display(next.z)}) mm · ${display(intent.geometryPolicy?.movementMode)}`;
+  }
+  if (intent?.intentKind === 'VALVE_REPLACEMENT') {
+    return `${display(intent.priorValue?.valveType)} → ${display(intent.requestedValue?.catalogueBinding?.valveType)} · record ${display(intent.requestedValue?.catalogueBinding?.recordId)} · F2F ${display(intent.priorValue?.lengthMm)} → ${display(intent.requestedValue?.catalogueBinding?.valveFaceToFaceMm)} mm · ${display(intent.geometryPolicy?.anchor)} / ${display(intent.geometryPolicy?.propagation)}`;
+  }
+  if (intent?.intentKind === 'TEE_REDUCER_RELATION') {
+    return `branch ${display(intent.requestedValue?.branchPortKey)} · reducer ${display(intent.requestedValue?.reducerEdgeId)} · DN run ${display(intent.requestedValue?.runNominalSizeMm)} / branch ${display(intent.requestedValue?.teeBranchNominalSizeMm)} / downstream ${display(intent.requestedValue?.downstreamNominalSizeMm)}`;
+  }
+  return display(intent?.intentKind);
+}
+
+function pipeEditor(row, stagedIntents, catalogue, canonicalTopology) {
+  const lengthIntent = intentOf(stagedIntents, 'PIPE_LENGTH');
+  const specificationIntent = intentOf(stagedIntents, 'PIPE_SPECIFICATION');
+  const selectedRecordId = specificationIntent?.requestedValue?.catalogueBinding?.recordId ?? '';
+  const candidates = topologyEditTablePipeSpecificationCandidates({
+    catalogue,
+    row,
+    canonicalTopology,
+  });
+  const catalogueOptions = candidates.map((record) => option(
+    record.recordId,
+    topologyEditTablePipeSpecificationCatalogueLabel(record),
+    record.recordId === selectedRecordId,
+  )).join('');
+  const selected = specificationIntent?.requestedValue?.catalogueBinding
+    ?? candidates.find((record) => record.recordId === selectedRecordId)
+    ?? null;
+  const length = lengthIntent?.requestedValue?.lengthMm ?? row.fields?.lengthMm ?? '';
+  const anchor = lengthIntent?.geometryPolicy?.anchor ?? 'FROM';
+  const propagation = lengthIntent?.geometryPolicy?.propagation ?? 'DOWNSTREAM';
+  const prompt = catalogue
+    ? (candidates.length ? 'Choose exact compatible PIPE record…' : 'No alternative certifiable PIPE record')
+    : 'Certified catalogue unavailable';
+  return `<section class="topology-edit-table__editor" data-table-editor-id="${esc(row.identity.canonicalId)}">
+    ${identityHtml(row)}
+    <p class="topology-edit-table__notice">Length is a geometry operation. Specification changes bind one immutable PIPE catalogue record as a whole tuple: DN, schedule, material, piping/pressure class, OD, wall thickness and end connections. OD, wall and derived ID are never free-typed.</p>
+    <div class="topology-edit-table__editor-grid">
+      <label>Length (mm)<input type="number" step="any" min="0" data-table-edit-length value="${esc(length)}"></label>
+      <label>Anchor<select data-table-edit-anchor><option ${anchor === 'FROM' ? 'selected' : ''}>FROM</option><option ${anchor === 'TO' ? 'selected' : ''}>TO</option></select></label>
+      <label>Propagation<select data-table-edit-propagation><option ${propagation === 'DOWNSTREAM' ? 'selected' : ''}>DOWNSTREAM</option><option ${propagation === 'UPSTREAM' ? 'selected' : ''}>UPSTREAM</option></select></label>
+      <button type="button" data-table-action="stage-pipe-length" data-canonical-id="${esc(row.identity.canonicalId)}">Stage length</button>
+      <label class="topology-edit-table__wide">Certified PIPE catalogue record<select data-table-edit-pipe-catalogue-record data-table-pipe-catalogue-hash="${esc(catalogue?.catalogueHash ?? '')}" ${candidates.length ? '' : 'disabled'}><option value="">${esc(prompt)}</option>${catalogueOptions}</select></label>
+      <button type="button" data-table-action="stage-pipe-specification" data-canonical-id="${esc(row.identity.canonicalId)}" ${candidates.length ? '' : 'disabled'}>Stage specification</button>
+      <span class="topology-edit-table__wide" data-table-pipe-specification-consequences>Current/selected resolved evidence: OD ${esc(selected?.outsideDiameterMm ?? row.fields?.outsideDiameterMm ?? '—')} mm · Wall ${esc(selected?.wallThicknessMm ?? row.fields?.wallThicknessMm ?? '—')} mm · ID ${esc(insideDiameter(selected?.outsideDiameterMm ?? row.fields?.outsideDiameterMm, selected?.wallThicknessMm ?? row.fields?.wallThicknessMm))} mm.</span>
+    </div>
+    ${custodyHtml(row)}
+  </section>`;
+}
+
+function nodeEndpointEditor(row, stagedIntent, runtime, topology, endpoint) {
+  const capability = deriveTopologyEditTableNodePositionCapability({
+    row,
+    endpoint,
+    projection: runtime.projection,
+    canonicalTopology: topology,
+  });
+  const nodeId = capability.details?.nodeId
+    ?? row.identity?.portBindings?.find((entry) => entry?.endpoint === endpoint)?.nodeId
+    ?? null;
+  const node = (topology.nodes ?? []).find((entry) => entry?.id === nodeId) ?? null;
+  const staged = intentOf(stagedIntent, 'NODE_POSITION', endpoint);
+  const point = staged?.requestedValue?.position ?? node?.position ?? { x: '', y: '', z: '' };
+  const mode = staged?.geometryPolicy?.movementMode ?? 'NODE_ONLY';
+  const disabled = capability.status === 'AVAILABLE' ? '' : 'disabled';
+  const title = capability.reason ?? 'Node position authority unavailable.';
+  return `<fieldset class="topology-edit-table__wide" data-table-node-endpoint="${endpoint}">
+    <legend>${endpoint} node · ${esc(nodeId ?? 'unresolved')}</legend>
+    <label>X (mm)<input type="number" step="any" data-table-edit-node-x="${endpoint}" value="${esc(point.x)}" ${disabled}></label>
+    <label>Y (mm)<input type="number" step="any" data-table-edit-node-y="${endpoint}" value="${esc(point.y)}" ${disabled}></label>
+    <label>Z (mm)<input type="number" step="any" data-table-edit-node-z="${endpoint}" value="${esc(point.z)}" ${disabled}></label>
+    <label>Movement<select data-table-edit-node-mode="${endpoint}" ${disabled}><option value="NODE_ONLY" ${mode === 'NODE_ONLY' ? 'selected' : ''}>NODE_ONLY</option><option value="CONNECTED_RUN" ${mode === 'CONNECTED_RUN' ? 'selected' : ''}>CONNECTED_RUN</option></select></label>
+    <button type="button" data-table-node-position-stage="${endpoint}" data-canonical-id="${esc(row.identity.canonicalId)}" title="${esc(title)}" ${disabled}>Stage ${endpoint} position</button>
+    <span data-table-node-capability="${endpoint}" data-table-capability-status="${esc(capability.status)}">${esc(capability.status === 'AVAILABLE' ? 'Certified' : title)}</span>
+  </fieldset>`;
+}
+
+function valveEditor(row, stagedIntents, catalogue) {
+  const staged = intentOf(stagedIntents, 'VALVE_REPLACEMENT');
+  const selectedRecordId = staged?.requestedValue?.catalogueBinding?.recordId ?? '';
+  const candidates = topologyEditTableValveCatalogueCandidates({ catalogue, row });
+  const catalogueOptions = candidates.map((record) => option(
+    record.recordId,
+    topologyEditTableValveCatalogueLabel(record),
+    record.recordId === selectedRecordId,
+  )).join('');
+  const anchor = staged?.geometryPolicy?.anchor ?? 'FROM';
+  const propagation = staged?.geometryPolicy?.propagation ?? 'DOWNSTREAM';
+  const gate = token(row.fields?.valveType) === 'GATE';
+  const selectable = gate && candidates.length > 0;
+  const disabled = selectable ? '' : 'disabled';
+  const prompt = catalogue
+    ? (candidates.length ? 'Choose exact compatible BALL record…' : 'No compatible BALL record in certified catalogue')
+    : 'Certified catalogue unavailable';
+  return `<section class="topology-edit-table__editor" data-table-editor-id="${esc(row.identity.canonicalId)}">
+    ${identityHtml(row)}
+    <p class="topology-edit-table__notice">M06 replaces an observed GATE valve in-place. Select one immutable BALL record from the same certified specification catalogue used by Professional Operations; record values and hashes are never typed or inferred here.</p>
+    <div class="topology-edit-table__editor-grid">
+      <label class="topology-edit-table__wide">Certified BALL catalogue record<select data-table-edit-valve-catalogue-record data-table-valve-catalogue-hash="${esc(catalogue?.catalogueHash ?? '')}" ${candidates.length ? '' : 'disabled'}><option value="">${esc(prompt)}</option>${catalogueOptions}</select></label>
+      <label>Anchor<select data-table-edit-anchor><option ${anchor === 'FROM' ? 'selected' : ''}>FROM</option><option ${anchor === 'TO' ? 'selected' : ''}>TO</option></select></label>
+      <label>Propagation<select data-table-edit-propagation><option ${propagation === 'DOWNSTREAM' ? 'selected' : ''}>DOWNSTREAM</option><option ${propagation === 'UPSTREAM' ? 'selected' : ''}>UPSTREAM</option></select></label>
+      <button type="button" data-table-action="stage-valve-replacement" data-canonical-id="${esc(row.identity.canonicalId)}" ${disabled}>Stage GATE → BALL</button>
+    </div>
+    ${custodyHtml(row)}
+  </section>`;
+}
+
+function teeReducerEditor(row, stagedIntents, projection) {
+  const staged = intentOf(stagedIntents, 'TEE_REDUCER_RELATION');
+  const selectedBranch = staged?.requestedValue?.branchPortKey ?? '';
+  const selectedReducer = staged?.requestedValue?.reducerEdgeId ?? '';
+  const bindings = [...(row.identity?.portBindings ?? [])]
+    .filter((entry) => entry?.nodeId && entry?.portKey)
+    .sort((left, right) => left.portKey.localeCompare(right.portKey));
+  const reducers = (projection?.rows ?? [])
+    .filter((candidate) => candidate.elementType === 'REDUCER'
+      && candidate.identity?.canonicalKind === 'EDGE'
+      && candidate.custody?.catalogueAuthority === 'EXACT'
+      && candidate.custody?.catalogue)
+    .sort((left, right) => left.identity.canonicalId.localeCompare(right.identity.canonicalId));
+  const branchOptions = bindings.map((entry) => option(
+    entry.portKey,
+    `${entry.portKey} · ${entry.nodeId}`,
+    entry.portKey === selectedBranch,
+  )).join('');
+  const reducerOptions = reducers.map((candidate) => option(
+    candidate.identity.canonicalId,
+    `${candidate.fields?.tag ?? candidate.identity.canonicalId} · ${candidate.identity.canonicalId}`,
+    candidate.identity.canonicalId === selectedReducer,
+  )).join('');
+  return `<section class="topology-edit-table__editor" data-table-editor-id="${esc(row.identity.canonicalId)}">
+    ${identityHtml(row)}
+    <p class="topology-edit-table__notice">M10 binds one explicit TEE branch port to one directly connected reducer with exact catalogue custody. No branch role or reducer size is guessed.</p>
+    <div class="topology-edit-table__editor-grid">
+      <label>Branch port<select data-table-edit-tee-branch-port><option value="">Choose exact branch port…</option>${branchOptions}</select></label>
+      <label>Reducer<select data-table-edit-tee-reducer><option value="">Choose exact reducer…</option>${reducerOptions}</select></label>
+      <label>Run DN (mm)<input type="number" step="any" min="0" data-table-edit-tee-run-dn value="${esc(staged?.requestedValue?.runNominalSizeMm ?? row.fields?.runDnMm ?? '')}"></label>
+      <label>TEE branch DN (mm)<input type="number" step="any" min="0" data-table-edit-tee-branch-dn value="${esc(staged?.requestedValue?.teeBranchNominalSizeMm ?? row.fields?.branchDnMm ?? '')}"></label>
+      <label>Downstream DN (mm)<input type="number" step="any" min="0" data-table-edit-tee-downstream-dn value="${esc(staged?.requestedValue?.downstreamNominalSizeMm ?? '')}"></label>
+      <button type="button" data-table-action="stage-tee-reducer-relation" data-canonical-id="${esc(row.identity.canonicalId)}">Stage TEE / reducer relation</button>
+    </div>
+    ${custodyHtml(row)}
+  </section>`;
+}
+
+function intentOf(input, kind, endpoint = null) {
+  const intents = Array.isArray(input) ? input : input ? [input] : [];
+  return intents.find((intent) => intent?.intentKind === kind
+    && (!endpoint || intent.requestedValue?.endpoint === endpoint)) ?? null;
+}
+function insideDiameter(odInput, wallInput) {
+  const od = Number(odInput); const wall = Number(wallInput);
+  if (!Number.isFinite(od) || !Number.isFinite(wall)) return '—';
+  const value = od - (2 * wall);
+  return value > 0 ? Number(value.toFixed(4)) : '—';
+}
+function identityHtml(row) {
+  return `<div class="topology-edit-table__identity"><strong>${esc(row.fields?.tag ?? row.identity.canonicalId)}</strong><code>${esc(row.identity.canonicalId)}</code><span>${esc(row.elementType)}</span></div>`;
+}
+function custodyHtml(row) {
+  return `<div class="topology-edit-table__custody"><span>Source ${esc(row.custody?.sourceStatus)}</span><span>Catalogue ${esc(row.custody?.catalogueAuthority)}</span><span>Revision ${esc(shortHash(row.targetRevision))}</span></div>`;
+}
+function option(value, label, selected) {
+  return `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
+}
+function display(value) { return value === null || value === undefined || value === '' ? '—' : String(value); }
+function token(value) { return String(value ?? '').trim().toUpperCase(); }
+function shortHash(value) {
+  const text = String(value ?? '');
+  return text.length > 16 ? `${text.slice(0, 13)}…` : text;
+}
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+}
