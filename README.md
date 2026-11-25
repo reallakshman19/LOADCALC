@@ -11,6 +11,7 @@ npm run dev       # http://localhost:5173
 npm run build     # -> dist/
 npm run preview
 npm test          # node:test files + check scripts (scripts/run-tests.mjs)
+npm run lint      # ESLint 9 (eslint.config.js); CI runs audit, lint, test, build
 ```
 
 Use **3D Demo** in the Dataset Tree to load the bundled fixture. Then open

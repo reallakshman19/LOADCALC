@@ -67,7 +67,7 @@ test('production lifecycle restores the plain selection contract and publishes r
     'topologyEditCommitDisposition',
   ]) assert.match(source, new RegExp(key));
   assert.doesNotMatch(
-    source.match(/updateLifecycleEvidence\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '',
+    source.match(/updateLifecycleEvidence\(\) \{([\s\S]*?)\n {2}\}/)?.[1] ?? '',
     /setItem|removeItem|execute|commitPrepared|WorkspaceState/,
   );
 });

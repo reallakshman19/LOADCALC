@@ -262,7 +262,7 @@ test('toolbar requires explicit six-axis bounds and discloses display-only autho
     'utf8',
   );
   assert.match(source, /SECTION_FIELDS = Object\.freeze\(\['min-x', 'max-x', 'min-y', 'max-y', 'min-z', 'max-z'\]\)/);
-  assert.match(source, /data-section-bound=\"\$\{name\}\"/);
+  assert.match(source, /data-section-bound="\$\{name\}"/);
   assert.match(source, /Enter all six finite section bounds/);
   assert.match(source, /do not modify geometry, command scope, or export/);
   assert.doesNotMatch(source, /data-section-bound="min-x"[^>]*value=/);

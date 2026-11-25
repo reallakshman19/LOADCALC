@@ -69,6 +69,12 @@ Each phase ends with something you can demo. The order follows "Load Calc first"
 
 **Done when:** CI passes on `main`, `npm audit` is clean, and the LICENSE is present.
 
+**Status (2026-11-25):** done except the LICENSE, which waits on the owner's
+choice. `xlsx` is 0.20.3 from the SheetJS CDN, `vite` is 7.3.8, and `npm audit`
+reports 0 vulnerabilities. CI (`.github/workflows/ci.yml`) runs audit, lint,
+tests and build. ESLint 9 uses upstream's rules; it reports 0 errors and 39
+`no-unused-vars` warnings, left for later.
+
 ### Phase 1 — Load Calc golden path (1–2 weeks) · fixes L1, L2, L3, L5, L11
 1. Ship a **sample master set** for the 1885S benchmark under `public/master-data/`: a Line List (line → piping class, material), plus the piping-class mapping and Project Data values the Input Check asks for.
 2. Add a **"Load sample project"** button that loads `Sjson.json` and those masters in one step.
