@@ -50,7 +50,7 @@ Severity: **P0** blocks the core use, **P1** misleads or confuses users,
 
 | # | Sev | Finding |
 | --- | --- | --- |
-| R1 | P0 | **The public repo has no LICENSE**, and upstream has none either. Legally that means all rights reserved. Choose a license, or make the repo private. |
+| R1 | P0 | **The public repo has no LICENSE**, and upstream has none either. Legally that means all rights reserved. Choose a license, or make the repo private. **Decision 2026-11-25:** stays public with no license. |
 | R2 | P1 | `xlsx@0.18.5` has a high-severity advisory (`npm audit`). SheetJS no longer publishes fixes to npm, so the fixed version has to be installed from SheetJS's own CDN. |
 | R3 | P1 | No CI. `npm test` and `npm run build` don't run on push or PR. |
 | R4 | P2 | No linter or formatter config. Line endings are mixed (upstream CRLF, my edits LF). |
@@ -69,8 +69,8 @@ Each phase ends with something you can demo. The order follows "Load Calc first"
 
 **Done when:** CI passes on `main`, `npm audit` is clean, and the LICENSE is present.
 
-**Status (2026-11-25):** done except the LICENSE, which waits on the owner's
-choice. `xlsx` is 0.20.3 from the SheetJS CDN, `vite` is 7.3.8, and `npm audit`
+**Status (2026-11-25):** done. The owner chose to keep the repo public
+without a license. `xlsx` is 0.20.3 from the SheetJS CDN, `vite` is 7.3.8, and `npm audit`
 reports 0 vulnerabilities. CI (`.github/workflows/ci.yml`) runs audit, lint,
 tests and build. ESLint 9 uses upstream's rules; it reports 0 errors and 39
 `no-unused-vars` warnings, left for later.
@@ -81,6 +81,22 @@ tests and build. ESLint 9 uses upstream's rules; it reports 0 errors and 39
 3. Write down which Load Calc pipeline "Run" executes, and which engine it uses (L9).
 4. **Gate Run on Input Check.** Show "Blocked: N issues — open Input Check" instead of ONE-CLICK, and turn the internal error into a sentence a user can act on.
 5. Add an **end-to-end test**: sample project → masters → auto-enrichment → Input Check READY → Run → Results package with support loads. Include golden numbers for at least 5 supports, checked against the upstream 1885S benchmark evidence.
+
+**Progress (2026-11-25), step 1 — Line List.** `public/master-data/sample-1885s-line-list.csv`
+holds the 5 lines in the benchmark (S8810101, S8810103, S8810111, S8810112,
+S8811951). The class (91261M7) and material (CSS) come from the model's own
+line names and from the upstream qualification record for S8811951
+(`1885s-webgl-load-benchmark.json`). Uploading it in the browser takes the
+benchmark from 0 to 129 accepted proposals. Applying the 26 catalogue weights
+with a clear winner brings Input Check to 79/127 entities resolved. What still
+blocks Run, and needs real engineering data rather than code:
+
+| Gap | Count | Why it is open |
+| --- | --- | --- |
+| Operating fluid density | 4 lines (86 pipe obligations) | The profile has a density only for S8811951 (67 kg/m³ mixed), taken from the client Line List. |
+| Fitting weights | 5 items | No catalogue row: angle control valve DN150, temperature instrument DN50, 2 blind flanges DN20, pressure gauge DN15. |
+| Project Data `STALE_SOURCE_HASH` | 2 paths | The profile is pinned to the client Line List's SHA-256, so any other Line List reads as stale. A sample project needs its own profile bound to the sample file. |
+| Project Data `MISSING_VALUE` | `loadCalculation.pipeSectionProperties` | The profile leaves it `{}` ("resolved at runtime"), but the validator requires a value. Likely a code/profile mismatch; needs a fix. |
 
 **Done when:** a new user can get support loads for the benchmark within 3 clicks of opening the app, and CI guards that path.
 
