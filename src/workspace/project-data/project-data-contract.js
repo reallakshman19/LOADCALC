@@ -352,9 +352,14 @@ function validatePositiveLeaves(value, path, errors, entry) {
 // ledger projection only ever admits a resolved-and-approved entry for a
 // target that actually needs one (requiredEffective throws otherwise), so an
 // approved empty object here is a complete answer, not a missing one.
+// LOADCALC: pipeSectionProperties joins them. Section sizes now come per
+// entity from accepted master-data proposals (PIPE_OUTER_DIAMETER /
+// PIPE_WALL_THICKNESS), and the 1885S profile records an approved empty map
+// for exactly that reason ("master-data-driven resolution").
 const EMPTY_MAP_ALLOWED_PATHS = new Set([
   'loadCalculation.insulationDensitiesKgPerM3',
   'loadCalculation.componentWeightsKg',
+  'loadCalculation.pipeSectionProperties',
 ]);
 
 function validateRequired(entry, path, errors) {

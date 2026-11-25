@@ -63,6 +63,7 @@ export function buildLoadCalcMasterEnrichmentProposals({ dataset, masters, proje
   // create new authority — it wires existing approved authority into proposal
   // generation. When no mapping exists the original class is tried unchanged.
   const classMappings = projectDataValue(projectProfile, 'topology.pipingClassMappings') || {};
+  const operatingFluidDensities = projectDataValue(projectProfile, 'loadCalculation.operatingFluidDensitiesKgPerM3') || {};
 
 
   const proposals = [];
@@ -147,16 +148,28 @@ export function buildLoadCalcMasterEnrichmentProposals({ dataset, masters, proje
     // Hydro density is not proposed here: an approved Project Data configured
     // default already supplies it, and proposing a second authority for the
     // same field would create a conflicting record rather than resolve one.
-    const operatingFluidDensity = finite(lineRow.operatingFluidDensity ?? lineRow.density);
-    if (operatingFluidDensity === null) {
+    // When the Line List row has no density, fall back to the approved
+    // Project Data value: first the line's own entry, then its DEFAULT. The
+    // fallback is proposed as PROJECT_CONFIGURED_DEFAULT, never as master data.
+    const lineListFluidDensity = finite(lineRow.operatingFluidDensity ?? lineRow.density);
+    const fallback = lineListFluidDensity === null
+      ? projectFluidDensityFallback(operatingFluidDensities, lineRow.lineKey)
+      : null;
+    if (lineListFluidDensity === null && fallback === null) {
       blockers.push(issue('LOAD_CALC_MASTER_OPERATING_FLUID_DENSITY_MISSING', targetId,
-        `Line List row ${lineRow.lineKey} carries no usable operating fluid density.`));
+        `Line List row ${lineRow.lineKey} carries no usable operating fluid density, and Project Data has no DEFAULT.`));
     } else {
       proposals.push(proposalFor(
         'OPERATING_FLUID_DENSITY',
-        operatingFluidDensity,
+        lineListFluidDensity ?? fallback.value,
         'kg/m3',
-        { ...context, fluidDensitySource: lineRow.densitySource || 'linelist' },
+        {
+          ...context,
+          fluidDensitySource: lineListFluidDensity !== null
+            ? (lineRow.densitySource || 'linelist')
+            : fallback.source,
+          projectDefault: lineListFluidDensity === null,
+        },
         masters,
       ));
     }
@@ -195,7 +208,25 @@ export function buildLoadCalcMasterEnrichmentProposals({ dataset, masters, proje
  * a rubber stamp.
  */
 function proposalFor(fieldId, value, unit, context, masters) {
-  const { targetId, boreMm, requestedClass, match, lineRow, fluidDensitySource } = context;
+  const { targetId, boreMm, requestedClass, match, lineRow, fluidDensitySource, projectDefault } = context;
+  if (projectDefault) {
+    return createNonFeaEnrichmentProposal({
+      proposalId: `loadcalc-master:${fieldId}:${targetId}`,
+      rationale: `Line List row ${lineRow.lineKey} has no operating fluid density; using the approved Project Data fallback (${fluidDensitySource}).`,
+      record: {
+        recordId: `loadcalc-master:${fieldId}:${targetId}`,
+        selectorKind: 'ENTITY',
+        selectorKey: targetId,
+        fieldId,
+        value,
+        unit,
+        authority: 'PROJECT_CONFIGURED_DEFAULT',
+        sourceId: 'projectData',
+        revision: 'loadCalculation.operatingFluidDensitiesKgPerM3',
+        evidence: { matchMode: 'PROJECT_DEFAULT', boreMm, lineKey: lineRow.lineKey, fluidDensitySource },
+      },
+    });
+  }
   // Fluid density comes from the Line List, every other field from the Piping
   // Class master. Attributing all of them to one master would misstate which
   // approved source a value can be traced back to.
@@ -249,6 +280,15 @@ function boreFromSourceEntity(entity) {
     if (Number.isFinite(numeric) && numeric > 0) return numeric;
   }
   return null;
+}
+
+/** Project Data operating fluid density for a line, else its DEFAULT. */
+function projectFluidDensityFallback(densities, lineKey) {
+  const own = densities[String(lineKey || '')];
+  const ownValue = finite(own?.selected ?? own);
+  if (ownValue !== null) return { value: ownValue, source: `projectData:${lineKey}` };
+  const fallbackValue = finite(densities.DEFAULT?.selected ?? densities.DEFAULT);
+  return fallbackValue === null ? null : { value: fallbackValue, source: 'projectData:DEFAULT' };
 }
 
 function finite(value) {

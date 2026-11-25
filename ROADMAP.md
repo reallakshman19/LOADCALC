@@ -88,15 +88,15 @@ S8811951). The class (91261M7) and material (CSS) come from the model's own
 line names and from the upstream qualification record for S8811951
 (`1885s-webgl-load-benchmark.json`). Uploading it in the browser takes the
 benchmark from 0 to 129 accepted proposals. Applying the 26 catalogue weights
-with a clear winner brings Input Check to 79/127 entities resolved. What still
-blocks Run, and needs real engineering data rather than code:
+with a clear winner brings Input Check to 79/127 entities resolved. Follow-up
+fixes the same day:
 
-| Gap | Count | Why it is open |
-| --- | --- | --- |
-| Operating fluid density | 4 lines (86 pipe obligations) | The profile has a density only for S8811951 (67 kg/m³ mixed), taken from the client Line List. |
-| Fitting weights | 5 items | No catalogue row: angle control valve DN150, temperature instrument DN50, 2 blind flanges DN20, pressure gauge DN15. |
-| Project Data `STALE_SOURCE_HASH` | 2 paths | The profile is pinned to the client Line List's SHA-256, so any other Line List reads as stale. A sample project needs its own profile bound to the sample file. |
-| Project Data `MISSING_VALUE` | `loadCalculation.pipeSectionProperties` | The profile leaves it `{}` ("resolved at runtime"), but the validator requires a value. Likely a code/profile mismatch; needs a fix. |
+| Gap | Status |
+| --- | --- |
+| Operating fluid density, 4 lines | **Fixed.** Owner-approved fallback `DEFAULT: 1000 kg/m³` in Project Data; Load Calc proposes it (as PROJECT_CONFIGURED_DEFAULT) when a Line List row has no density. S8811951 keeps 67 kg/m³ from the sample Line List. |
+| Project Data `STALE_SOURCE_HASH` | **Fixed.** The bundled profile now points at the sample Line List. A Line List the user loads is now re-bound in Project Data (before, only bundled masters were). Locally, `Sjson.json` also read as stale because Git checked it out with CRLF; it is now LF, matching the committed file. |
+| `pipeSectionProperties` `MISSING_VALUE` | **Fixed.** An approved empty map is accepted, as it already was for insulation densities and component weights. Section sizes come from accepted per-entity master proposals. |
+| Fitting weights, 5 items | **Open.** No catalogue row: angle control valve DN150, temperature instrument DN50, 2 blind flanges DN20, pressure gauge DN15. This is the last Input Check blocker (122/127 entities resolved). |
 
 **Done when:** a new user can get support loads for the benchmark within 3 clicks of opening the app, and CI guards that path.
 

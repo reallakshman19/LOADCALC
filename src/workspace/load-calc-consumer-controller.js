@@ -114,7 +114,15 @@ export class LoadCalcConsumerController {
       // sync weight/materialMap seed).  The function is idempotent — it skips
       // any master that already has normalizedRows or a user-committed fieldMap.
       this.eventBus.subscribe('MASTER_DATA_UPDATED', ({ action } = {}) => {
-        if (!action?.startsWith('bundled_seed')) return;
+        if (!action?.startsWith('bundled_seed')) {
+          // A user-loaded master replaces the active source, so Project Data's
+          // source binding must follow it or Input Check reports it as stale.
+          import('./master-data-ui.js')
+            .then(({ autoBindMasterSources }) => autoBindMasterSources())
+            .then((bindResult) => { if (bindResult?.bound?.length > 0) this.render(); })
+            .catch(() => {});
+          return;
+        }
         import('./master-data-ui.js').then(async ({ autoNormalizeBundledMasters, autoGenerateMasterEnrichment, autoBindMasterSources, autoEnsureDefaultQualificationProfile }) => {
           const committed = autoNormalizeBundledMasters();
           if (committed.length > 0) this.render();
