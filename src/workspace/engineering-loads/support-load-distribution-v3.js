@@ -244,17 +244,85 @@ function buildExecutionIndex(input, globalBlockers, hasActiveCases, configuratio
         });
       }
     }
-    routeById.set(route.routeId, { chainageByEntityId, supports });
+    routeById.set(route.routeId, { chainageByEntityId, supports, branchTransfer: null });
   });
+  attachBranchTransfers(input.routePartitionModel.routes, routeById, entityById, edgeById);
 
   return { entityById, edgeById, routeById, baseMassByEntityId };
+}
+
+/**
+ * A branch route with no bearing support of its own (e.g. a small instrument
+ * or drain branch on an olet) hangs from the pipe its head references. The
+ * source names that fitting explicitly (BRANCH HREF). Such a route gets one
+ * virtual support at its head; its reaction is then applied to the host route
+ * as a point load at the HREF fitting. Only hosts with real supports qualify.
+ */
+function attachBranchTransfers(routes, routeById, entityById, edgeById) {
+  for (const route of routes) {
+    const entry = routeById.get(route.routeId);
+    if (!Array.isArray(entry?.supports) || entry.supports.length > 0) continue;
+    const branch = entityById.get(route.branchId);
+    const attributes = branch?.properties?.attributes || {};
+    const hrefEntityId = stringValue(attributes.HREF);
+    const headPoint = pointValue(attributes.HPOS);
+    if (!hrefEntityId || !headPoint) continue;
+    const host = routes.find((candidate) => candidate !== route
+      && candidate.status === 'READY'
+      && routeById.get(candidate.routeId)?.supports?.length > 0
+      && routeById.get(candidate.routeId).chainageByEntityId.has(hrefEntityId));
+    if (!host) continue;
+    const hostChainageMm = routeById.get(host.routeId).chainageByEntityId.get(hrefEntityId).pointMm;
+    const headChainageMm = routeEndChainage(route, entry, edgeById, headPoint);
+    if (!Number.isFinite(hostChainageMm) || !Number.isFinite(headChainageMm)) continue;
+    const virtualSiteId = `branch-connection:${route.routeId}`;
+    entry.supports = [{ siteId: virtualSiteId, chainageMm: headChainageMm, virtual: true }];
+    entry.branchTransfer = {
+      virtualSiteId,
+      hostRouteId: host.routeId,
+      hostChainageMm,
+      hrefEntityId,
+      headChainageMm,
+    };
+  }
+}
+
+// Chainage of the route end nearest the branch head position.
+function routeEndChainage(route, entry, edgeById, point) {
+  let best = null;
+  for (const entityId of route.edgeIds) {
+    const edge = edgeById.get(entityId);
+    const row = entry.chainageByEntityId.get(entityId);
+    if (!edge || !row || edge.pointComponent || edge.topologyCarrier) continue;
+    const ends = [[edge.startMm, row.sourceStartChainageMm], [edge.endMm, row.sourceEndChainageMm]];
+    for (const [end, chainageMm] of ends) {
+      const distance = Math.hypot(end.x - point.x, end.y - point.y, end.z - point.z);
+      if (Number.isFinite(chainageMm) && (!best || distance < best.distance)) best = { distance, chainageMm };
+    }
+  }
+  return best ? best.chainageMm : null;
+}
+
+function pointValue(value) {
+  const point = typeof value === 'string' ? safeJson(value) : value;
+  return point && [point.x, point.y, point.z].every(Number.isFinite) ? point : null;
+}
+
+function safeJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function calculateCase(caseId, input, globalBlockers, execution) {
   supportLoadPerformanceMetrics.caseEvaluations += 1;
   const state = createCaseState(caseId, globalBlockers);
   if (globalBlockers.length === 0) {
-    input.routePartitionModel.routes.forEach((route) => calculateRoute(route, input, state, execution));
+    const routes = input.routePartitionModel.routes;
+    const isTransfer = (route) => Boolean(execution.routeById.get(route.routeId)?.branchTransfer);
+    routes.filter((route) => !isTransfer(route)).forEach((route) => calculateRoute(route, input, state, execution));
+    routes.filter(isTransfer).forEach((route) => {
+      calculateRoute(route, input, state, execution);
+      applyBranchTransfer(route, input, state, execution);
+    });
   }
   const equilibrium = globalBlockers.length
     ? blockedEquilibrium()
@@ -320,6 +388,44 @@ function calculateRoute(route, input, state, execution) {
       : allocateSupportPointLoad({ chainageMm: application.chainageMm, forceN, supports });
     recordContribution(state, route, entity, chainage, application, mass, forceN, accounting);
   });
+}
+
+function applyBranchTransfer(route, input, state, execution) {
+  const transfer = execution.routeById.get(route.routeId).branchTransfer;
+  const forceN = state.reactions.get(transfer.virtualSiteId) ?? 0;
+  const momentDemandNmm = state.boundaryMomentBySite.get(transfer.virtualSiteId) ?? 0;
+  state.reactions.delete(transfer.virtualSiteId);
+  state.contributorsBySite.delete(transfer.virtualSiteId);
+  state.boundaryMomentBySite.delete(transfer.virtualSiteId);
+  state.transferForceN += forceN;
+  state.exceptions.push({
+    code: 'BRANCH_LOAD_TRANSFERRED_TO_HOST',
+    routeId: route.routeId,
+    hostRouteId: transfer.hostRouteId,
+    hostEntityId: transfer.hrefEntityId,
+    hostChainageMm: transfer.hostChainageMm,
+    verticalForceN: forceN,
+    branchMomentDemandNmm: momentDemandNmm,
+  });
+  if (forceN === 0) return;
+  const hostSupports = execution.routeById.get(transfer.hostRouteId).supports;
+  const host = input.routePartitionModel.routes.find((row) => row.routeId === transfer.hostRouteId);
+  const accounting = allocateSupportPointLoad({ chainageMm: transfer.hostChainageMm, forceN, supports: hostSupports });
+  const entity = {
+    entityId: `BRANCH_TRANSFER:${route.branchId}`,
+    sourceEntityId: null,
+    jsonPointer: null,
+    componentReference: transfer.hrefEntityId,
+  };
+  const chainage = { pointMm: transfer.hostChainageMm };
+  const application = { qualified: true, chainageMm: transfer.hostChainageMm, authority: null };
+  // Mass is already counted on the branch route; the transfer carries force only.
+  const mass = {
+    qualified: true,
+    massKg: 0,
+    formula: { branchTransferFromRouteId: route.routeId, hostEntityId: transfer.hrefEntityId },
+  };
+  recordContribution(state, host, entity, chainage, application, mass, forceN, accounting);
 }
 
 function resolveLegacyCaseMass(execution, entity, edge, caseId, profile) {
@@ -818,7 +924,7 @@ function equilibriumCheck(state, profile) {
   const globalClosure = evaluateSupportLoadAccounting({
     evaluatedForceN: state.evaluatedForceN,
     evaluatedMomentNmm: state.evaluatedMomentNmm,
-    reactionForceN: sum([...state.reactions.values()]),
+    reactionForceN: sum([...state.reactions.values()]) + state.transferForceN,
     reactionMomentNmm: state.reactionMomentNmm,
     boundaryTransferMomentNmm: state.boundaryTransferMomentNmm,
     unallocatedForceN: state.unallocatedForceN,
@@ -859,9 +965,10 @@ function equilibriumCheck(state, profile) {
     passed,
     momentReference: 'PER_ROUTE_CHAINAGE_ORIGIN_WITH_AGGREGATE_DIAGNOSTIC',
     routeChecks,
-    appliedForceN: globalClosure.evaluatedForceN,
-    evaluatedForceN: globalClosure.evaluatedForceN,
-    reactionN: globalClosure.reactionForceN,
+    appliedForceN: globalClosure.evaluatedForceN - state.transferForceN,
+    evaluatedForceN: globalClosure.evaluatedForceN - state.transferForceN,
+    reactionN: globalClosure.reactionForceN - state.transferForceN,
+    branchTransferForceN: state.transferForceN,
     unallocatedForceN: globalClosure.unallocatedForceN,
     forceResidualN: globalClosure.forceResidualN,
     appliedMomentNmm: globalClosure.evaluatedMomentNmm,
@@ -924,8 +1031,9 @@ function blockedEquilibrium() {
 
 function completenessAudit(state, status) {
   const allocatedForceN = sum([...state.reactions.values()]);
-  const coverageRatio = state.evaluatedForceN > 0
-    ? allocatedForceN / state.evaluatedForceN
+  const evaluatedNetForceN = state.evaluatedForceN - state.transferForceN;
+  const coverageRatio = evaluatedNetForceN > 0
+    ? allocatedForceN / evaluatedNetForceN
     : (state.excludedInputs.length > 0 ? 0 : 1);
   return {
     status: status === 'FAILED'
@@ -940,9 +1048,10 @@ function completenessAudit(state, status) {
     allocatedMassKg: state.allocatedMassKg,
     unallocatedMassKg: state.unallocatedMassKg,
     blockedInvalidMassKg: state.excludedInputs.length > 0 ? null : 0,
-    evaluatedForceN: state.evaluatedForceN,
+    evaluatedForceN: evaluatedNetForceN,
     allocatedForceN,
     unallocatedForceN: state.unallocatedForceN,
+    branchTransferForceN: state.transferForceN,
     invalidForceN: state.excludedInputs.length > 0 ? null : 0,
     coverageRatio,
     boundaryTransferMomentNmm: state.boundaryTransferMomentNmm,
@@ -953,7 +1062,7 @@ function completenessAudit(state, status) {
     unallocatedContributionCount: state.ledger.filter((row) => row.unallocated.length > 0).length,
     excludedContributionCount: state.excludedInputs.length,
     exceptionCount: state.exceptions.length,
-    qualifiedAppliedForceN: state.ledger.length ? state.evaluatedForceN : null,
+    qualifiedAppliedForceN: state.ledger.length ? evaluatedNetForceN : null,
     qualifiedReactionCandidateN: state.ledger.length ? allocatedForceN : null,
     qualifiedContributionCount: state.ledger.length,
   };
@@ -1125,6 +1234,10 @@ function createCaseState(caseId, blockers) {
     boundaryTransferMomentNmm: 0,
     unallocatedForceN: 0,
     unallocatedMomentNmm: 0,
+    // Force moved from an unsupported branch's virtual head support onto its
+    // host route: once as a virtual reaction (removed from reactions) and once
+    // as a host load (added to evaluated force). Reported totals net it out.
+    transferForceN: 0,
   };
 }
 

@@ -119,7 +119,7 @@ Read as each support's vertical load within ~10 % of a stiffness-based reference
 | 11,259 | 1,859 | 0 (lifts off) | — |
 | 14,900 | 5,673 | 7,323 | −22.5 % |
 
-**Conclusion: V2 tributary cannot meet 90 %.** Needed, in order of effect: (1) continuous-beam vertical solve with one-way (lift-off) supports — `src/core/vertical-beam-solver` exists but is blocked on every path here (INSUFFICIENT_VERTICAL_SUPPORTS ×126, DUPLICATE_SUPPORT_STATION ×39, POINT_LOAD_MAPPING_FAILED ×36); (2) real insulation thickness (0 mm sample under-weights insulated lines by roughly 10–20 %); (3) distributed mass along pipes, not midpoint lumps; (4) branch load transfer. A reference result (e.g. CAESAR II) for 1885S is needed to measure the target.
+**Conclusion: V2 tributary cannot meet 90 %.** Needed, in order of effect: (1) continuous-beam vertical solve with one-way (lift-off) supports — `src/core/vertical-beam-solver` exists but is blocked on every path here (INSUFFICIENT_VERTICAL_SUPPORTS ×126, DUPLICATE_SUPPORT_STATION ×39, POINT_LOAD_MAPPING_FAILED ×36); (2) real insulation thickness (0 mm sample under-weights insulated lines by roughly 10–20 %); (3) branch load transfer — done 2026-11-26. (Distributed pipe mass was already in place.) A reference result (e.g. CAESAR II) for 1885S is needed to measure the target.
 
 #### First benchmark results review (2026-11-26)
 
@@ -129,9 +129,9 @@ Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment 
 | --- | --- | --- |
 | Hand check | Site x 427515 (6" S8811951 B2): lever-rule between neighbouring supports gives 713.8 kg → 7,000 N vs 7,014 N reported (0.2 %, chainage-origin approximation). | Distribution arithmetic confirmed for one site. |
 | 61 × OVERHANG_CANTILEVER_TRANSFER | Items beyond the last support of a route, carried as cantilever to the end support with a transfer moment. | Expected; informational. |
-| 20 × UNALLOCATED_FORCE_NO_QUALIFIED_VERTICAL_SUPPORT (1,001 N) | All on 10" S8810101 branches B2 (406 N) and B3 (595 N): small instrument/drain branches with no bearing support. Routes are branch-scoped, so their weight is not transferred to the parent pipe at the olet/tee. | **Open — method gap.** Proposed: transfer an unsupported branch's force (and moment) to the host route at its connection point. |
+| 20 × UNALLOCATED_FORCE_NO_QUALIFIED_VERTICAL_SUPPORT (1,001 N) | All on 10" S8810101 branches B2 (406 N) and B3 (595 N): small branches with no bearing support. | **Fixed.** An unsupported branch gets a virtual support at its head; that reaction is applied to the host route at the BRANCH HREF fitting. Coverage now 100 % in EMPTY/OPE/HYD; equilibrium passes; 2 × BRANCH_LOAD_TRANSFERRED_TO_HOST recorded. Test: `tests/support-load-branch-transfer.test.mjs`. |
 | 7 sites at 0 N | 1 LINESTOP (axial only — correct). 6 have no support type in the source (bare ATTA-150/ATTA-20 points, 2 × PENE-150 wall penetrations, and PS-12297 SREF catalogue FT17-7.6-PMP); treated as non-bearing. | Bare ATTA/PENE: acceptable. **PS-12297: needs a support-family mapping.** |
-| Long pipes lumped at midpoint | A tube that crosses a support (e.g. B2 6, B2 8, 2.8 m / 149 kg) is applied as one point at its midpoint, not split at the support. | **Open — accuracy.** Split distributed mass at support chainages. |
+| Long pipes lumped at midpoint | Wrong finding (review read only the ledger's summary chainage). Pipes already use `allocateSupportUniformLoad` and split across supports (e.g. B2 8: 324 / 1,071 / 71 N). | No change needed. |
 | Instrument =1006649732/51250 | 697 kg on a 6" line (from fitting-weight review). | Plausibility check with owner. |
 
 
