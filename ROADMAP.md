@@ -106,6 +106,21 @@ fixes the same day:
 | Model length unit + support attachment | **Fixed.** The shared model reads mm from the SJSON POSI text when the package declares no unit (only if every POSI agrees). That exposed two attachment bugs, both fixed: a straight component's reference target snapped supports to its centre instead of projecting onto its centreline; and source order picked elbow 23 for B1 supports that sit on the TAIL pipe (indexed later); exact containment now corrects an order-based pick. All 139 supports attach within 0.5 mm; 37 distinct sites kept. Test: `tests/load-calc-run-path-fixes.test.mjs`. |
 | Insulation thickness | **Sample assumption.** Project Data configured default `1885S_INSULATION_THICKNESS_SAMPLE_ZERO` = 0 mm, labelled SAMPLE ASSUMPTION. Benchmark Run now completes: EMPTY case 87,618 N evaluated, 86,617 N allocated (98.9 %), 1,001 N unallocated, 81 exceptions, CALCULATED_WITH_EXCEPTIONS. Exceptions and 0 N sites not yet reviewed; numbers not yet hand-checked. |
 
+#### Accuracy target: 90 % (owner, 2026-11-26)
+
+Read as each support's vertical load within ~10 % of a stiffness-based reference. Independent check, `benchmarks/checks/route-b2-continuous-beam-check.mjs` (route S8811951/B2, EMPTY, continuous beam with uniform EI and rigid pinned supports):
+
+| Support ch (mm) | V2 (N) | Continuous beam, lift-off released (N) | V2 vs beam |
+| ---: | ---: | ---: | ---: |
+| 1,493 | 3,792 | 3,726 | +1.8 % |
+| 4,003 | 3,484 | 2,457 | +41.8 % |
+| 5,837 | 7,014 | 8,748 | −19.8 % |
+| 9,123 | 3,840 | 3,407 | +12.7 % |
+| 11,259 | 1,859 | 0 (lifts off) | — |
+| 14,900 | 5,673 | 7,323 | −22.5 % |
+
+**Conclusion: V2 tributary cannot meet 90 %.** Needed, in order of effect: (1) continuous-beam vertical solve with one-way (lift-off) supports — `src/core/vertical-beam-solver` exists but is blocked on every path here (INSUFFICIENT_VERTICAL_SUPPORTS ×126, DUPLICATE_SUPPORT_STATION ×39, POINT_LOAD_MAPPING_FAILED ×36); (2) real insulation thickness (0 mm sample under-weights insulated lines by roughly 10–20 %); (3) distributed mass along pipes, not midpoint lumps; (4) branch load transfer. A reference result (e.g. CAESAR II) for 1885S is needed to measure the target.
+
 #### First benchmark results review (2026-11-26)
 
 Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.
