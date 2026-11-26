@@ -108,6 +108,14 @@
             "unit": "kg/m³",
             "basis": "Owner-approved bulk insulation density fallback for positive thickness without an exact insulation-code value",
             "allowedMethods": ["WEIGHT_AND_GRAVITY", "SUSTAINED_REACTIONS", "SUSTAINED_MEMBER_ACTIONS", "SUSTAINED_STRESS", "RESTRAINT_REACTIONS", "VERTICAL_CONTACT", "COMBINED_OPERATING_REACTION", "ENRICHED_STAGED_JSON_EXPORT"]
+          },
+          {
+            "defaultId": "1885S_INSULATION_THICKNESS_SAMPLE_ZERO",
+            "fieldId": "INSULATION_THICKNESS",
+            "value": 0,
+            "unit": "mm",
+            "basis": "SAMPLE ASSUMPTION — not project data. No insulation thickness source exists for the 1885S sample (lines carry spec /FP-HOT but no thickness); 0 mm owner-approved 2026-11-26 so the benchmark can run. Loads exclude insulation weight.",
+            "allowedMethods": ["WEIGHT_AND_GRAVITY", "SUSTAINED_REACTIONS", "SUSTAINED_MEMBER_ACTIONS", "SUSTAINED_STRESS", "RESTRAINT_REACTIONS", "VERTICAL_CONTACT", "COMBINED_OPERATING_REACTION", "ENRICHED_STAGED_JSON_EXPORT"]
           }
         ]
       },
