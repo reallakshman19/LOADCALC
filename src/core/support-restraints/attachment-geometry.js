@@ -1,6 +1,13 @@
 import { deepFreeze } from '../shared-piping-model/index.js';
 
 export function projectPointToTarget(point, target) {
+  // A straight two-port component (centre on its port-to-port line, e.g. a
+  // pipe) carries the support anywhere along that line: project onto it.
+  // Snapping to the centre put supports up to half a pipe length away.
+  if (target.pointCanonical && target.startCanonical && target.endCanonical
+      && onSegment(target.pointCanonical, target.startCanonical, target.endCanonical)) {
+    return segmentProjection(point, target.startCanonical, target.endCanonical);
+  }
   if (target.pointCanonical) return pointProjection(point, target.pointCanonical);
   if (target.startCanonical && target.endCanonical) {
     return segmentProjection(point, target.startCanonical, target.endCanonical);
@@ -53,6 +60,12 @@ function dot(left, right) {
 
 function distance(left, right) {
   return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z);
+}
+
+function onSegment(point, start, end) {
+  const length = distance(start, end);
+  if (!(length > 0)) return false;
+  return segmentProjection(point, start, end).distanceCanonical <= length * 1e-9;
 }
 
 function clamp(value) {

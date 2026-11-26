@@ -239,8 +239,30 @@ function workspaceProject(dataset) {
 
 function workspaceUnits(dataset) {
   const source = dataset.sourceSnapshot?.sourcePackage || {};
-  const unit = stringValue(source.unit || source.units?.length || source.project?.units?.length || 'unknown');
+  const declared = stringValue(source.unit || source.units?.length || source.project?.units?.length || '');
+  const unit = declared || attributeLengthUnit(dataset) || 'unknown';
   return { length: unit, force: stringValue(source.units?.force || 'unknown'), mass: stringValue(source.units?.mass || 'unknown') };
+}
+
+const POSITION_TEXT = /^\s*[ENSWUD]\s+-?\d+(?:\.\d+)?\s*(mm|m|in|ft)(?![a-z])/i;
+
+/**
+ * Some exports (e.g. SJSON) carry numeric positions with no package-level
+ * unit, but every component also writes its position as text with an
+ * explicit unit ("E 437523.219mm S 1159925mm U 1157.2mm"). That text is
+ * source evidence. Use it only when every such attribute names one unit.
+ */
+function attributeLengthUnit(dataset) {
+  const units = new Set();
+  for (const entity of dataset.entities || []) {
+    const text = entity?.properties?.attributes?.POSI;
+    if (typeof text !== 'string') continue;
+    const match = text.match(POSITION_TEXT);
+    if (!match) return '';
+    units.add(match[1].toLowerCase());
+    if (units.size > 1) return '';
+  }
+  return units.size === 1 ? [...units][0] : '';
 }
 
 function snapshotReference(snapshot) {

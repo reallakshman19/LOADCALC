@@ -126,7 +126,7 @@ function explicitResolution(support, targets, evidenceType, state) {
 }
 
 function resolveSourceRelation(support, state) {
-  const related = sourceRelatedComponents(support, state.sharedModel, state.targets.targets);
+  const related = sourceRelatedComponents(support, state.sharedModel, state.targets.targets, state.tolerance);
   if (!related.length) return unhandled();
   const compatible = related.filter((target) => isCompatible(support, target, state));
   if (compatible.length === 1) {

@@ -35,7 +35,7 @@ export function createAttachmentRecord(support, target, evidenceType, tolerance,
   });
 }
 
-export function sourceRelatedComponents(support, sharedModel, targets) {
+export function sourceRelatedComponents(support, sharedModel, targets, tolerance = null) {
   const nodes = sharedModel.sourceReferences?.nodes || [];
   const nodeByKey = new Map(nodes.map((node) => [node.sourceNodeKey, node]));
   const parentByNode = new Map(nodes.map((node) => [node.sourceNodeKey, node.parentSourceNodeKey]));
@@ -49,7 +49,25 @@ export function sourceRelatedComponents(support, sharedModel, targets) {
       || (supportPathParent && targetPathParent && supportPathParent === targetPathParent),
     );
   });
-  return nearestSourceSequenceTargets(support, related, nodeByKey, supportParent);
+  const sequenced = nearestSourceSequenceTargets(support, related, nodeByKey, supportParent);
+  if (sequenced === related) return related; // no source-order evidence: leave as-is
+  return supportLiesOnOneTarget(support, related, tolerance) || sequenced;
+}
+
+// Source order can disagree with geometry (e.g. a generated TAIL pipe is
+// indexed after the supports that sit on it). When source order has picked a
+// component but the support lies on exactly one same-parent component, that
+// component wins. Without source-order evidence nothing is inferred here.
+function supportLiesOnOneTarget(support, related, tolerance) {
+  if (!support.positionCanonical) return null;
+  // Without an approved projection tolerance, only exact containment counts.
+  const limit = Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 1e-6;
+  const hits = related.filter((target) => {
+    const projection = projectPointToTarget(support.positionCanonical, target);
+    return projection && projection.distanceCanonical <= limit;
+  });
+  const keys = new Set(hits.map((target) => target.componentKey));
+  return keys.size === 1 ? hits : null;
 }
 
 export function portTargets(ports, targets) {
