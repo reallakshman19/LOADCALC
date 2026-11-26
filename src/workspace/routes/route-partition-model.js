@@ -22,7 +22,10 @@ export function buildRoutePartitionModel(dataset, profile) {
   const edges = dataset.entities.map(toEdge).filter(Boolean);
   classifyAutoCarriers(edges, autoCarrierTolerance);
   const byBranch = groupBy(edges, (edge) => edge.branchId || 'UNASSIGNED');
-  const routes = [...byBranch.entries()].flatMap(([branchId, branchEdges]) => connectedRoutes(branchId, branchEdges, tolerance));
+  const routes = attachPointOnlyRoutes(
+    [...byBranch.entries()].flatMap(([branchId, branchEdges]) => connectedRoutes(branchId, branchEdges, tolerance)),
+    tolerance,
+  );
   const blockers = [];
   if (!Number.isFinite(tolerance)) blockers.push({ code: 'MISSING_PORT_MATCH_TOLERANCE', projectDataPath: 'topology.portMatchToleranceMm' });
   if (!Number.isFinite(autoCarrierTolerance)) {
@@ -117,7 +120,7 @@ function createRoute(branchId, index, edges, tolerance) {
   const degrees = nodes.map((node) => ({ ...node, degree: topologyEdges.filter((edge) => pointOnEdgeEnd(node.positionMm, edge, tolerance)).length }));
   const ambiguous = degrees.some((node) => node.degree > 2);
   const chainage = ambiguous ? { entityChainages: [], totalLengthMm: null } : buildLinearChainage(topologyEdges, degrees, edges, tolerance);
-  return freezeDeep({
+  return {
     routeId: `route:${branchId}:${index + 1}`,
     branchId,
     lineKey: edges.find((edge) => edge.lineKey)?.lineKey || '',
@@ -128,7 +131,10 @@ function createRoute(branchId, index, edges, tolerance) {
     physicalEdgeIds: edges.filter((edge) => edge.physical).map((edge) => edge.edgeId),
     entityChainages: chainage.entityChainages,
     totalLengthMm: chainage.totalLengthMm,
-  });
+    // Internal, stripped before the model is frozen.
+    nodeChainageMm: chainage.nodeChainageMm || null,
+    pointOnlyEdges: edges.length && !topologyEdges.length && edges.every((edge) => edge.pointComponent) ? edges : null,
+  };
 }
 
 function buildLinearChainage(topologyEdges, nodes, allEdges, tolerance) {
@@ -170,7 +176,57 @@ function buildLinearChainage(topologyEdges, nodes, allEdges, tolerance) {
     const endMm = end ? nodeChainage.get(end.nodeId) : null;
     return { entityId: edge.entityId, startMm, endMm, sourceStartChainageMm: startMm, sourceEndChainageMm: endMm, pointMm: Number.isFinite(startMm) && Number.isFinite(endMm) ? (startMm + endMm) / 2 : null };
   });
-  return { entityChainages: [...ordered, ...pointRows, ...carrierRows], totalLengthMm };
+  return {
+    entityChainages: [...ordered, ...pointRows, ...carrierRows],
+    totalLengthMm,
+    nodeChainageMm: Object.fromEntries(nodeChainage),
+  };
+}
+
+/**
+ * A branch made only of zero-length point components (e.g. a gauge on a
+ * nozzle) has no chainage of its own. When every point sits on a node of
+ * exactly one other READY route on the same line, attach those components to
+ * that host route at the coincident node. Anything ambiguous stays as it was.
+ */
+function attachPointOnlyRoutes(routes, tolerance) {
+  const result = [...routes];
+  routes.forEach((orphan) => {
+    const pointEdges = orphan.pointOnlyEdges;
+    if (!pointEdges?.length) return;
+    const hostIndexes = new Set();
+    const placements = [];
+    for (const edge of pointEdges) {
+      const matches = [];
+      result.forEach((host, index) => {
+        if (host === orphan || host.status !== 'READY' || host.pointOnlyEdges) return;
+        if (orphan.lineKey && host.lineKey && orphan.lineKey !== host.lineKey) return;
+        const node = host.nodes.find((candidate) => samePoint(candidate.positionMm, edge.startMm, tolerance));
+        const pointMm = node ? host.nodeChainageMm?.[node.nodeId] : undefined;
+        if (Number.isFinite(pointMm)) matches.push({ index, node, pointMm });
+      });
+      if (matches.length !== 1) return;
+      hostIndexes.add(matches[0].index);
+      placements.push({ edge, ...matches[0] });
+    }
+    if (hostIndexes.size !== 1) return;
+    const [hostIndex] = hostIndexes;
+    const host = result[hostIndex];
+    result[hostIndex] = {
+      ...host,
+      edgeIds: [...host.edgeIds, ...placements.map(({ edge }) => edge.edgeId)],
+      physicalEdgeIds: [...host.physicalEdgeIds, ...placements.filter(({ edge }) => edge.physical).map(({ edge }) => edge.edgeId)],
+      entityChainages: [...host.entityChainages, ...placements.map(({ edge, pointMm }) => ({
+        entityId: edge.entityId, startMm: pointMm, endMm: pointMm,
+        sourceStartChainageMm: pointMm, sourceEndChainageMm: pointMm, pointMm,
+      }))],
+      attachedPointComponents: [...(host.attachedPointComponents || []), ...placements.map(({ edge, node }) => ({
+        entityId: edge.entityId, fromBranchId: orphan.branchId, fromRouteId: orphan.routeId, hostNodeId: node.nodeId,
+      }))],
+    };
+    result.splice(result.indexOf(orphan), 1);
+  });
+  return result.map(({ pointOnlyEdges, nodeChainageMm, ...route }) => freezeDeep(route));
 }
 
 function uniqueNodes(edges, tolerance) {

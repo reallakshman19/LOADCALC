@@ -15,6 +15,9 @@ import {
 import {
   LOAD_CALC_ENGINEERING_PRODUCT_DEFAULTS_EMPTY_V1,
 } from '../project-data/non-fea-product-engineering-default-profile.js';
+import { createNonFeaProductDefaultProvider } from '../project-data/non-fea-product-default-profile.js';
+import { projectDataValue } from '../project-data/project-data-contract.js';
+import { NON_FEA_COMPONENT_COG_FALLBACK } from '../project-data/non-fea-component-cog-fallback-policy.js';
 import {
   requireCurrentNonFeaEmpiricalRunAuthorization,
 } from './non-fea-empirical-run-authorization.js';
@@ -71,6 +74,7 @@ export function createCurrentCommonInputEmpiricalMassProjection({
   const commonInput = current.commonInput;
   const loadCaseIds = normalizeLoadCases(commonInput.requestedLoadCases);
   const basis = buildProjectionBasis(commonInput);
+  const cogFallback = componentCogFallback(commonInput.projectDataProfile);
   const entityRows = basis.effectiveLoadSourceProjection.components.map((component) => projectComponent({
     component,
     components: basis.effectiveLoadSourceProjection.components,
@@ -78,6 +82,7 @@ export function createCurrentCommonInputEmpiricalMassProjection({
     loadCaseIds,
     ancillaryByLine: basis.ancillaryByLine,
     compositionProfile: basis.compositionProfile,
+    cogFallback,
   })).sort((left, right) => ascii(left.entityId, right.entityId));
 
   const base = {
@@ -216,7 +221,10 @@ function buildProjectionBasis(commonInput) {
     requestedMethods: ['WEIGHT_AND_GRAVITY'],
   });
   if (ancillaryOverlay.blockers.length) {
-    throw codedError('Current Common Input ancillary configured-default overlay is blocked.',
+    const shown = ancillaryOverlay.blockers.slice(0, 3)
+      .map((row) => row.message || row.code || JSON.stringify(row)).join(' | ');
+    const more = ancillaryOverlay.blockers.length > 3 ? ` (+${ancillaryOverlay.blockers.length - 3} more)` : '';
+    throw codedError(`Current Common Input ancillary configured-default overlay is blocked: ${shown}${more}`,
       'CURRENT_COMMON_INPUT_EMPIRICAL_ANCILLARY_OVERLAY_BLOCKED', ancillaryOverlay.blockers);
   }
   if (LOAD_CALC_ENGINEERING_PRODUCT_DEFAULTS_EMPTY_V1.defaults.length !== 0) {
@@ -238,15 +246,19 @@ function buildProjectionBasis(commonInput) {
   };
 }
 
-function projectComponent({ component, components, target, loadCaseIds, ancillaryByLine, compositionProfile }) {
+function projectComponent({ component, components, target, loadCaseIds, ancillaryByLine, compositionProfile, cogFallback }) {
   if (!target || target.sourceRecordId !== component.componentKey) {
     throw codedError(`Component ${component.componentKey || '<missing>'} is not bound to one exact target row.`,
       'CURRENT_COMMON_INPUT_EMPIRICAL_MASS_TARGET_MISMATCH');
   }
   const derivedDryMass = derivePipeLikeFittingWeightEvidence(component, components);
-  const resolvedComponent = derivedDryMass
+  const weighted = derivedDryMass
     ? { ...component, engineeringProperties: { ...component.engineeringProperties, componentWeightKg: derivedDryMass } }
     : component;
+  const resolvedComponent = withCogFallback(weighted, cogFallback);
+  const applicationPointBasis = resolvedComponent === weighted
+    ? (component.geometry?.applicationPoint ? 'SOURCE' : 'NONE')
+    : NON_FEA_COMPONENT_COG_FALLBACK.GEOMETRIC_MIDPOINT;
   const ancillary = target.lineTargetId
     ? ancillaryByLine.get(target.lineTargetId) || zeroAncillary()
     : zeroAncillary();
@@ -264,6 +276,7 @@ function projectComponent({ component, components, target, loadCaseIds, ancillar
     componentType: String(component.type || 'OBJECT').toUpperCase(),
     lineTargetId: target.lineTargetId,
     lineKey: target.lineKey,
+    applicationPointBasis,
     derivedDryMassEvidence: derivedDryMass ? deepFreeze({
       valueKg: derivedDryMass.value,
       source: derivedDryMass.source,
@@ -274,10 +287,30 @@ function projectComponent({ component, components, target, loadCaseIds, ancillar
   });
 }
 
+/**
+ * Product default PD-COMPONENT-COG-FALLBACK (GEOMETRIC_MIDPOINT): a lumped
+ * component with no CoG evidence is applied at the midpoint of its own
+ * end points. Supplied CoG evidence is never replaced.
+ */
+function componentCogFallback(profile) {
+  const effective = createNonFeaProductDefaultProvider({ profile }).effectiveProfile;
+  return String(projectDataValue(effective, 'loadCalculation.componentCogFallback') || '').toUpperCase();
+}
+
+function withCogFallback(component, cogFallback) {
+  if (cogFallback !== NON_FEA_COMPONENT_COG_FALLBACK.GEOMETRIC_MIDPOINT) return component;
+  const { start, end, applicationPoint } = component.geometry || {};
+  if (applicationPoint || !start || !end) return component;
+  if (component.loadEvidence?.componentCog) return component;
+  const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2, z: (start.z + end.z) / 2 };
+  return { ...component, geometry: { ...component.geometry, applicationPoint: midpoint } };
+}
+
 function projectCase({ component, target, loadCaseId, ancillary, compositionProfile }) {
   const result = resolveComponentCaseMass(component, loadCaseId, compositionProfile);
   if (!result.ok) {
-    throw codedError(`Current Common Input component ${component.componentKey} cannot project ${loadCaseId} mass.`,
+    const reasons = (result.blockers || []).map((row) => (typeof row === 'string' ? row : row?.code || JSON.stringify(row)));
+    throw codedError(`Current Common Input component ${component.componentKey} (${String(component.type || 'OBJECT').toUpperCase()}) cannot project ${loadCaseId} mass${reasons.length ? `: ${reasons.join(', ')}` : ''}.`,
       'CURRENT_COMMON_INPUT_EMPIRICAL_MASS_NOT_PROJECTABLE', {
         targetId: target.targetId,
         entityId: component.componentKey,

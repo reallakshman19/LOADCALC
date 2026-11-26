@@ -99,7 +99,12 @@ fixes the same day:
 | Fitting weights, 5 items | **Placeholders (owner-approved 2026-11-26).** Closest 900# catalogue items, labelled SAMPLE ASSUMPTION; listed in `public/master-data/sample-1885s-placeholder-weights.json`. With them, Input Check passes with 0 blockers. |
 | Run authorization (upstream bug) | **Fixed.** The run decision sorts its method IDs but the coordinator's receipt keeps registry order; an exact JSON compare made every Run fail with "receipt that does not bind the system Run authorization". Now compared as sets. |
 | Run error message | **Improved.** "selectedMethod must be a non-empty trimmed string" now says why no gravity method qualified and names the component. |
-| Zero-length branch B5 (pressure gauge 88-PG-10052) | **Open — last Run blocker.** Branch B5 holds only the gauge, a zero-length route sitting on the DN20 blind flange that ends branch B4. With no chainage, its 3 kg cannot be placed, so AUTO method selection returns EXCEPTION_POLICY_REQUIRED. Proposed fix: attach a zero-length point-component route to the coincident host route so its load acts at that point. |
+| Zero-length branch B5 (pressure gauge 88-PG-10052) | **Fixed.** A branch made only of zero-length point items now attaches to the one READY route on the same line that it touches; the gauge acts at the B4 blind flange. Test: `tests/route-partition-point-only-branch.test.mjs`. |
+| Configured-default unit spelling | **Fixed.** Project Data writes `kg/m³`, common-enriched fields name `kg/m3`; the overlay now compares them as one unit. |
+| Elbow / lumped CoG | **Fixed.** The mass projection now applies the existing product default PD-COMPONENT-COG-FALLBACK (geometric midpoint) when no CoG evidence exists, and records `applicationPointBasis` per row. |
+| Zero-mass point with no position | **Fixed.** Mass ledger treats a 0 kg point (e.g. gasket) without an application point as zero moment; a non-zero one fails with a coded error. |
+| Model length unit | **Open.** SJSON has no package unit, so the shared model says `unknown` and every component is UNIT_BLOCKED at Run. The POSI text (`E …mm`) states mm; a patch reading it exists but is held back: once units are known, support attachment runs for the first time and 138/139 supports attach to an AUTO pipe segment that does not span them (up to 622 mm off), collapsing 37 support sites to 22. |
+| Insulation thickness | **Open.** No source anywhere: the master step never proposes INSULATION_THICKNESS and the sample Line List has no column. Input Check passes anyway (gap), Run fails with MISSING_INSULATION_INPUT on AUTO pipes. |
 
 **Done when:** a new user can get support loads for the benchmark within 3 clicks of opening the app, and CI guards that path.
 

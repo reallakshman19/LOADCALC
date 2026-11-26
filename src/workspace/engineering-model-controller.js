@@ -272,6 +272,8 @@ export class EngineeringModelController {
       });
       return runtime;
     } catch (error) {
+      // Coded errors are expected fail-closed outcomes; anything else is a bug.
+      if (!error?.code) console.error('Load Calc Run failed unexpectedly:', error);
       this.eventBus.publish(ENGINEERING_MODEL_EVENTS.FAILED, {
         message: error instanceof Error ? error.message : String(error),
         code: error?.code || 'CURRENT_COMMON_INPUT_EMPIRICAL_RUN_FAILED',

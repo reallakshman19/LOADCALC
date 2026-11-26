@@ -312,7 +312,7 @@ export function requireConfiguredDefaultOverlay(value) {
 }
 
 function configuredDefaultField(record, fieldName, expectedUnit, sourceKey, provider) {
-  if (record.unit !== expectedUnit) {
+  if (canonicalUnit(record.unit) !== canonicalUnit(expectedUnit)) {
     return {
       value: null,
       blocker: issue(
@@ -329,7 +329,7 @@ function configuredDefaultField(record, fieldName, expectedUnit, sourceKey, prov
       schema: COMMON_ENRICHED_FIELD_SCHEMA,
       field: fieldName,
       value: record.value,
-      unit: record.unit,
+      unit: expectedUnit,
       status: 'RESOLVED_DERIVED',
       sourceKind: 'PROJECT_CONFIGURED_DEFAULT',
       sourceKey,
@@ -344,6 +344,11 @@ function configuredDefaultField(record, fieldName, expectedUnit, sourceKey, prov
       diagnostics: [NON_FEA_CONFIGURED_DEFAULT_SCOPE_PRECEDENCE],
     }),
   };
+}
+
+// Project Data writes "kg/m³"; common-enriched fields name "kg/m3". Same unit.
+function canonicalUnit(unit) {
+  return String(unit ?? '').trim().replace(/³/g, '3').replace(/²/g, '2');
 }
 
 function defaultAuthorityFingerprint(record) {

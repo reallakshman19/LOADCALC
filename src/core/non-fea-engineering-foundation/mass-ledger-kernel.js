@@ -108,7 +108,17 @@ function midpoint(left, right) {
     z: (left.z + right.z) / 2,
   });
 }
-function firstMoment(mass, point) { return deepFreeze({ x: mass * point.x, y: mass * point.y, z: mass * point.z }); }
+function firstMoment(mass, point) {
+  // Zero-mass point items (e.g. gaskets defaulted to 0 kg) may carry no
+  // application point; they contribute no moment. A real mass still needs one.
+  if (!point) {
+    if (mass === 0) return deepFreeze({ x: 0, y: 0, z: 0 });
+    const error = new TypeError('A non-zero point mass has no application point.');
+    error.code = 'NON_FEA_MASS_LEDGER_APPLICATION_POINT_MISSING';
+    throw error;
+  }
+  return deepFreeze({ x: mass * point.x, y: mass * point.y, z: mass * point.z });
+}
 function addPoint(left, right) { return { x: left.x + right.x, y: left.y + right.y, z: left.z + right.z }; }
 function dividePoint(point, divisor) { return deepFreeze({ x: point.x / divisor, y: point.y / divisor, z: point.z / divisor }); }
 function sourceTrace(primitive, sourceId) {
