@@ -96,7 +96,10 @@ fixes the same day:
 | Operating fluid density, 4 lines | **Fixed.** Owner-approved fallback `DEFAULT: 1000 kg/m³` in Project Data; Load Calc proposes it (as PROJECT_CONFIGURED_DEFAULT) when a Line List row has no density. S8811951 keeps 67 kg/m³ from the sample Line List. |
 | Project Data `STALE_SOURCE_HASH` | **Fixed.** The bundled profile now points at the sample Line List. A Line List the user loads is now re-bound in Project Data (before, only bundled masters were). Locally, `Sjson.json` also read as stale because Git checked it out with CRLF; it is now LF, matching the committed file. |
 | `pipeSectionProperties` `MISSING_VALUE` | **Fixed.** An approved empty map is accepted, as it already was for insulation densities and component weights. Section sizes come from accepted per-entity master proposals. |
-| Fitting weights, 5 items | **Open.** No catalogue row: angle control valve DN150, temperature instrument DN50, 2 blind flanges DN20, pressure gauge DN15. This is the last Input Check blocker (122/127 entities resolved). |
+| Fitting weights, 5 items | **Placeholders (owner-approved 2026-11-26).** Closest 900# catalogue items, labelled SAMPLE ASSUMPTION; listed in `public/master-data/sample-1885s-placeholder-weights.json`. With them, Input Check passes with 0 blockers. |
+| Run authorization (upstream bug) | **Fixed.** The run decision sorts its method IDs but the coordinator's receipt keeps registry order; an exact JSON compare made every Run fail with "receipt that does not bind the system Run authorization". Now compared as sets. |
+| Run error message | **Improved.** "selectedMethod must be a non-empty trimmed string" now says why no gravity method qualified and names the component. |
+| Zero-length branch B5 (pressure gauge 88-PG-10052) | **Open — last Run blocker.** Branch B5 holds only the gauge, a zero-length route sitting on the DN20 blind flange that ends branch B4. With no chainage, its 3 kg cannot be placed, so AUTO method selection returns EXCEPTION_POLICY_REQUIRED. Proposed fix: attach a zero-length point-component route to the coincident host route so its load acts at that point. |
 
 **Done when:** a new user can get support loads for the benchmark within 3 clicks of opening the app, and CI guards that path.
 

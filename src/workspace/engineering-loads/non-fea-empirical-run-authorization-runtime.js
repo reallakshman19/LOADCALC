@@ -44,8 +44,7 @@ export function authorizeCurrentNonFeaEmpiricalRun(
       || receipt.implementationId !== decision.implementationId
       || receipt.methodRequestSemanticHash !== decision.semanticHash
       || receipt.commonInputSemanticHash !== decision.commonInputSemanticHash
-      || JSON.stringify(receipt.requiredCommonMethodIds)
-        !== JSON.stringify(decision.requiredCommonMethodIds)) {
+      || !sameMethodSet(receipt.requiredCommonMethodIds, decision.requiredCommonMethodIds)) {
     fail(
       'Method-currentness coordinator returned a receipt that does not bind the system Run authorization.',
       'NON_FEA_EMPIRICAL_RUN_AUTHORIZATION_COORDINATOR_BINDING_MISMATCH',
@@ -67,6 +66,14 @@ export function authorizeCurrentNonFeaEmpiricalRun(
     decision,
     methodAuthorization: receipt,
   });
+}
+
+// The decision sorts its method IDs; the coordinator's receipt keeps the
+// binding-registry order. Both name the same methods, so compare as sets.
+// (Upstream compared exact JSON, which made every routine Run fail.)
+function sameMethodSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
 function requireCoordinator(value) {

@@ -144,6 +144,20 @@ export function executeCurrentCommonInputEmpiricalRun({
     'governed gravity-method selection',
     'CURRENT_COMMON_INPUT_EMPIRICAL_RUN_METHOD_SELECTION_INVALID',
   );
+  if (!governedSelection?.selection?.selectedMethod) {
+    // Say why no gravity method qualified instead of a bare field error.
+    const selection = governedSelection?.selection || {};
+    const exceptions = Array.isArray(selection.exceptions) ? selection.exceptions : [];
+    const sample = exceptions.slice(0, 3)
+      .map((row) => `${row.entityId} (${(row.blockerCodes || []).join("/") || row.disposition || "blocked"})`)
+      .join(', ');
+    fail(
+      `No gravity method could be selected: ${selection.selectionState || 'UNKNOWN'}`
+        + (exceptions.length ? `; ${exceptions.length} component exception(s), e.g. ${sample}.` : '.'),
+      'CURRENT_COMMON_INPUT_EMPIRICAL_RUN_METHOD_NOT_SELECTED',
+      { selectionState: selection.selectionState || null, exceptions: exceptions.slice(0, 20) },
+    );
+  }
   const selectedMethod = requiredText(
     governedSelection?.selection?.selectedMethod,
     'governedSelection.selection.selectedMethod',

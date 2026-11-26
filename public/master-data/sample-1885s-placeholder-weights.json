@@ -1,0 +1,13 @@
+{
+  "note": "SAMPLE ASSUMPTION - not project data. Placeholder weights for the 5 benchmark fittings with no Weights master row, approved by the owner on 2026-11-26 for the sample project only. Each is the closest 900# catalogue item in public/fixtures/wtValveweights.xlsx.",
+  "fieldId": "COMPONENT_WEIGHT",
+  "unit": "kg",
+  "authority": "ACCEPTED_OVERRIDE",
+  "rows": [
+    { "entityId": "=1006649732/51284", "item": "88-HCV-11067 angle control valve DN150 900#", "weightKg": 408, "basis": "Flanged Control Valve DN150 900# RF" },
+    { "entityId": "=1006649732/51463", "item": "88-TG-10052 temperature instrument DN50", "weightKg": 15, "basis": "Weldneck Flange DN50 900#" },
+    { "entityId": "=1006649732/51476", "item": "Blind flange DN20 900#", "weightKg": 4, "basis": "Weldneck Flange DN20 900# (no DN20 blind row; DN50 blind 14 kg vs weldneck 15 kg)" },
+    { "entityId": "=1006649732/51483", "item": "Blind flange DN20 900#", "weightKg": 4, "basis": "Weldneck Flange DN20 900# (no DN20 blind row)" },
+    { "entityId": "=1006649732/51485", "item": "88-PG-10052 pressure gauge DN15", "weightKg": 3, "basis": "Weldneck Flange DN15 900#" }
+  ]
+}
