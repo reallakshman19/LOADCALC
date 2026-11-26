@@ -106,6 +106,20 @@ fixes the same day:
 | Model length unit + support attachment | **Fixed.** The shared model reads mm from the SJSON POSI text when the package declares no unit (only if every POSI agrees). That exposed two attachment bugs, both fixed: a straight component's reference target snapped supports to its centre instead of projecting onto its centreline; and source order picked elbow 23 for B1 supports that sit on the TAIL pipe (indexed later); exact containment now corrects an order-based pick. All 139 supports attach within 0.5 mm; 37 distinct sites kept. Test: `tests/load-calc-run-path-fixes.test.mjs`. |
 | Insulation thickness | **Sample assumption.** Project Data configured default `1885S_INSULATION_THICKNESS_SAMPLE_ZERO` = 0 mm, labelled SAMPLE ASSUMPTION. Benchmark Run now completes: EMPTY case 87,618 N evaluated, 86,617 N allocated (98.9 %), 1,001 N unallocated, 81 exceptions, CALCULATED_WITH_EXCEPTIONS. Exceptions and 0 N sites not yet reviewed; numbers not yet hand-checked. |
 
+#### First benchmark results review (2026-11-26)
+
+Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.
+
+| Finding | Detail | Status |
+| --- | --- | --- |
+| Hand check | Site x 427515 (6" S8811951 B2): lever-rule between neighbouring supports gives 713.8 kg → 7,000 N vs 7,014 N reported (0.2 %, chainage-origin approximation). | Distribution arithmetic confirmed for one site. |
+| 61 × OVERHANG_CANTILEVER_TRANSFER | Items beyond the last support of a route, carried as cantilever to the end support with a transfer moment. | Expected; informational. |
+| 20 × UNALLOCATED_FORCE_NO_QUALIFIED_VERTICAL_SUPPORT (1,001 N) | All on 10" S8810101 branches B2 (406 N) and B3 (595 N): small instrument/drain branches with no bearing support. Routes are branch-scoped, so their weight is not transferred to the parent pipe at the olet/tee. | **Open — method gap.** Proposed: transfer an unsupported branch's force (and moment) to the host route at its connection point. |
+| 7 sites at 0 N | 1 LINESTOP (axial only — correct). 6 have no support type in the source (bare ATTA-150/ATTA-20 points, 2 × PENE-150 wall penetrations, and PS-12297 SREF catalogue FT17-7.6-PMP); treated as non-bearing. | Bare ATTA/PENE: acceptable. **PS-12297: needs a support-family mapping.** |
+| Long pipes lumped at midpoint | A tube that crosses a support (e.g. B2 6, B2 8, 2.8 m / 149 kg) is applied as one point at its midpoint, not split at the support. | **Open — accuracy.** Split distributed mass at support chainages. |
+| Instrument =1006649732/51250 | 697 kg on a 6" line (from fitting-weight review). | Plausibility check with owner. |
+
+
 **Done when:** a new user can get support loads for the benchmark within 3 clicks of opening the app, and CI guards that path.
 
 ### Phase 2 — Load Calc clarity (1 week) · fixes L4, L6, L7
