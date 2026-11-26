@@ -1,6 +1,6 @@
 # LOADCALC handover
 
-Written 2026-11-26 for the next agent or engineer. Read this first, then
+Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agent: [docs/new-agent-prompt.md](docs/new-agent-prompt.md). Read this first, then
 [ROADMAP.md](ROADMAP.md) (audit, phases, results tables) and
 [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md).
 
