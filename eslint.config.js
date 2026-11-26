@@ -19,7 +19,8 @@ const rules = {
 };
 
 export default defineConfig([
-  globalIgnores(['dist', 'node_modules', '_source', '**/*.test.js']),
+  // benchmarks/browser holds console snippets pasted one step at a time (not a module).
+  globalIgnores(['dist', 'node_modules', '_source', '**/*.test.js', 'benchmarks/browser/**']),
   {
     files: ['**/*.js', '**/*.mjs'],
     extends: [js.configs.recommended],

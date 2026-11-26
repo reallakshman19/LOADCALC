@@ -119,7 +119,16 @@ Read as each support's vertical load within ~10 % of a stiffness-based reference
 | 11,259 | 1,859 | 0 (lifts off) | — |
 | 14,900 | 5,673 | 7,323 | −22.5 % |
 
-**Conclusion: V2 tributary cannot meet 90 %.** Needed, in order of effect: (1) continuous-beam vertical solve with one-way (lift-off) supports — `src/core/vertical-beam-solver` exists but is blocked on every path here (INSUFFICIENT_VERTICAL_SUPPORTS ×126, DUPLICATE_SUPPORT_STATION ×39, POINT_LOAD_MAPPING_FAILED ×36); (2) real insulation thickness (0 mm sample under-weights insulated lines by roughly 10–20 %); (3) branch load transfer — done 2026-11-26. (Distributed pipe mass was already in place.) A reference result (e.g. CAESAR II) for 1885S is needed to measure the target.
+**Conclusion: V2 tributary cannot meet 90 %.** Needed, in order of effect: (1) continuity between spans with one-way (lift-off) supports; (2) real insulation thickness (0 mm sample under-weights insulated lines by roughly 10–20 %); (3) branch load transfer — done 2026-11-26. (Distributed pipe mass was already in place.) A reference result (e.g. CAESAR II) for 1885S is needed to measure the target.
+
+**Owner decision (2026-11-26): no beam solver.** `src/core/vertical-beam-solver` and any whole-system stiffness solve are LFEA scope. Improve the empirical calculation instead. Empirical options tested on B2 (`benchmarks/checks/route-b2-empirical-methods.mjs`):
+
+| Method | 1,493 | 4,003 | 5,837 | 9,123 | 11,259 | 14,900 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A: lever rule, overhang moment carried by the end span | +8.3 % | +31.9 % | −19.8 % | +12.7 % | 145 N (beam 0) | +0.9 % |
+| B: three-moment hand calc (Clapeyron) + lift-off | +0.2 % | −0.8 % | +0.1 % | 0.0 % | 0 | 0.0 % |
+
+Core code for both is in `src/core/empirical-continuous-span/` (tested, not wired into the Run). B awaits the owner's explicit OK as "empirical". Guide and line stop loads: [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md), formulas in `src/core/empirical-restraint-loads/`. Full handover: [HANDOVER.md](HANDOVER.md).
 
 #### First benchmark results review (2026-11-26)
 
