@@ -13,8 +13,8 @@ import {
 import {
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
-  calculateSupportLoadDistribution,
-  calculateSupportLoadDistributionWithComponentCog,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
+  calculateSupportLoadDistributionForMethod,
 } from './support-load-distribution-v3.js';
 
 export const AUTHORIZED_EMPIRICAL_LOAD_EXECUTION_V2_REQUEST_SCHEMA =
@@ -25,6 +25,7 @@ export const AUTHORIZED_EMPIRICAL_LOAD_EXECUTION_V2_SCHEMA =
 export const AUTHORIZED_EMPIRICAL_EXECUTION_METHODS = Object.freeze([
   EMPIRICAL_LOAD_METHOD,
   EMPIRICAL_LOAD_COG_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 ]);
 
 const REQUEST_KEYS = [
@@ -112,9 +113,7 @@ export function calculateAuthorizedEmpiricalLoadExecutionV2(value) {
       routePartitionModel: value.routePartitionModel,
       masterData: value.masterData,
     })
-    : requestedMethod === EMPIRICAL_LOAD_METHOD
-      ? calculateSupportLoadDistribution(calculationInput)
-      : calculateSupportLoadDistributionWithComponentCog(calculationInput);
+    : calculateSupportLoadDistributionForMethod(requestedMethod, calculationInput);
   if (distribution.method !== requestedMethod) {
     fail(
       'Executed empirical method differs from the authorized method.',

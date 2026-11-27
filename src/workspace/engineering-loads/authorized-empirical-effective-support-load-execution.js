@@ -20,10 +20,8 @@ import {
   bindAuthorizedEmpiricalSupportCapabilityResult,
 } from './authorized-empirical-support-capability-binding.js';
 import {
-  EMPIRICAL_LOAD_COG_METHOD,
-  EMPIRICAL_LOAD_METHOD,
-  calculateSupportLoadDistribution,
-  calculateSupportLoadDistributionWithComponentCog,
+  EMPIRICAL_SUPPORT_LOAD_METHODS,
+  calculateSupportLoadDistributionForMethod,
 } from './support-load-distribution-v3.js';
 
 export const AUTHORIZED_EMPIRICAL_EFFECTIVE_SUPPORT_LOAD_EXECUTION_SCHEMA =
@@ -84,9 +82,7 @@ export function calculateAuthorizedEmpiricalEffectiveSupportLoads({
     routePartitionModel,
     masterData,
   };
-  const distribution = requestedMethod === EMPIRICAL_LOAD_METHOD
-    ? calculateSupportLoadDistribution(calculationInput)
-    : calculateSupportLoadDistributionWithComponentCog(calculationInput);
+  const distribution = calculateSupportLoadDistributionForMethod(requestedMethod, calculationInput);
 
   if (distribution.method !== requestedMethod) {
     throw codedError(
@@ -223,11 +219,11 @@ function assertNoLegacyFallbackConsumption(distribution) {
 }
 
 function requireMethod(value) {
-  if (value !== EMPIRICAL_LOAD_METHOD && value !== EMPIRICAL_LOAD_COG_METHOD) {
+  if (!EMPIRICAL_SUPPORT_LOAD_METHODS.includes(value)) {
     throw codedError(
       'Effective support-load execution method is unsupported.',
       'EMPIRICAL_EFFECTIVE_SUPPORT_METHOD_INVALID',
-      { value, allowed: [EMPIRICAL_LOAD_METHOD, EMPIRICAL_LOAD_COG_METHOD] },
+      { value, allowed: [...EMPIRICAL_SUPPORT_LOAD_METHODS] },
     );
   }
   return value;

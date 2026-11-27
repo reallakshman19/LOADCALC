@@ -16,6 +16,7 @@ import {
 import {
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 } from '../src/workspace/engineering-loads/support-load-distribution-v3.js';
 
 function record(entityId, cogClassification, options = {}) {
@@ -94,8 +95,9 @@ function checkMissingCogFallsBackOnlyToV2() {
     record('ELBOW-1', EMPIRICAL_COMPONENT_COG_CLASSIFICATION.ON_ROUTE),
     record('VALVE-1', EMPIRICAL_COMPONENT_COG_CLASSIFICATION.MIDPOINT_FALLBACK),
   ]);
-  assert.equal(result.selectedMethod, EMPIRICAL_LOAD_METHOD);
-  assert.equal(result.selectionState, 'SELECTED_V2_MISSING_COG_FALLBACK');
+  // AUTO picks the three-moment method (same midpoint input domain as V2).
+  assert.equal(result.selectedMethod, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
+  assert.equal(result.selectionState, 'SELECTED_THREE_MOMENT_MISSING_COG_FALLBACK');
   assert.equal(result.fallbackLedger.length, 1);
   assert.equal(result.fallbackLedger[0].reasonCode, 'COG_NOT_AVAILABLE');
   assert.equal(result.fallbackLedger[0].permittedByPolicy, true);
@@ -116,7 +118,7 @@ function checkDisabledPolicyStopsAutoFallback() {
   assert.equal(result.policy.missingCogMayFallbackToV2, false);
   assert.deepEqual(result.fallbackLedger, [{
     fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-    toMethod: EMPIRICAL_LOAD_METHOD,
+    toMethod: EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
     reasonCode: 'COG_FALLBACK_DISABLED_BY_POLICY',
     affectedEntityIds: ['VALVE-1'],
     permittedByPolicy: false,
@@ -189,7 +191,7 @@ function checkExplicitV2StillCannotEraseKnownEccentricity() {
 
 function checkBeamContactRemainsSeparateRestrictedFamily() {
   const result = select([]);
-  assert.equal(result.selectedMethod, EMPIRICAL_LOAD_METHOD);
+  assert.equal(result.selectedMethod, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
   const beam = result.candidates.find((row) => row.methodId === 'EMPIRICAL_BEAM_CONTACT_V1');
   assert.equal(beam.applicability, 'SEPARATE_RESTRICTED_MECHANICS_FAMILY');
   assert.equal(beam.selected, false);
@@ -205,5 +207,23 @@ checkKnownOffRouteCogCannotDisappearIntoV2();
 checkExplicitMomentCannotFallback();
 checkExplicitV2StillCannotEraseKnownEccentricity();
 checkBeamContactRemainsSeparateRestrictedFamily();
+checkExplicitThreeMomentSharesTheV2InputDomain();
+
+function checkExplicitThreeMomentSharesTheV2InputDomain() {
+  const ok = select([
+    record('VALVE-1', EMPIRICAL_COMPONENT_COG_CLASSIFICATION.MIDPOINT_FALLBACK),
+  ], EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
+  assert.equal(ok.selectedMethod, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
+  assert.equal(ok.selectionState, 'EXPLICIT_THREE_MOMENT_SELECTED');
+  assert.equal(ok.fallbackLedger.length, 0);
+  const blocked = select([
+    record('VALVE-1', EMPIRICAL_COMPONENT_COG_CLASSIFICATION.AMBIGUOUS, {
+      candidateChainageMm: null,
+      blockers: [{ code: 'EMPIRICAL_COMPONENT_COG_ROUTE_AMBIGUOUS' }],
+    }),
+  ], EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
+  assert.equal(blocked.selectedMethod, null);
+  assert.equal(blocked.selectionState, 'EXPLICIT_THREE_MOMENT_FALLBACK_PROHIBITED_BY_KNOWN_EVIDENCE');
+}
 
 console.log('Empirical gravity method-selection check: PASS');

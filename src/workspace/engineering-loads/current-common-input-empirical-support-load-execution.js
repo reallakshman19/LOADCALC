@@ -21,10 +21,8 @@ import {
   requireCurrentCurrentCommonInputEmpiricalMassProjection,
 } from './current-common-input-empirical-mass-projection.js';
 import {
-  EMPIRICAL_LOAD_COG_METHOD,
-  EMPIRICAL_LOAD_METHOD,
-  calculateSupportLoadDistributionFromQualifiedCaseMasses,
-  calculateSupportLoadDistributionWithComponentCogFromQualifiedCaseMasses,
+  EMPIRICAL_SUPPORT_LOAD_METHODS,
+  calculateSupportLoadDistributionFromQualifiedCaseMassesForMethod,
 } from './support-load-distribution-v3.js';
 
 export const CURRENT_COMMON_INPUT_EMPIRICAL_SUPPORT_LOAD_EXECUTION_SCHEMA =
@@ -116,15 +114,11 @@ export function calculateCurrentCommonInputEmpiricalSupportLoads({
     routePartitionModel,
     masterData,
   };
-  const rawDistribution = requestedMethod === EMPIRICAL_LOAD_METHOD
-    ? calculateSupportLoadDistributionFromQualifiedCaseMasses(
-      calculationInput,
-      massBinding.qualifiedCaseMasses,
-    )
-    : calculateSupportLoadDistributionWithComponentCogFromQualifiedCaseMasses(
-      calculationInput,
-      massBinding.qualifiedCaseMasses,
-    );
+  const rawDistribution = calculateSupportLoadDistributionFromQualifiedCaseMassesForMethod(
+    requestedMethod,
+    calculationInput,
+    massBinding.qualifiedCaseMasses,
+  );
   if (rawDistribution.method !== requestedMethod) {
     throw codedError(
       'Mass-receipt support-load execution returned a different empirical method.',
@@ -483,11 +477,11 @@ function normalizeCaseIds(value) {
 }
 
 function requireMethod(value) {
-  if (value !== EMPIRICAL_LOAD_METHOD && value !== EMPIRICAL_LOAD_COG_METHOD) {
+  if (!EMPIRICAL_SUPPORT_LOAD_METHODS.includes(value)) {
     throw codedError(
       'Current Common Input support-load method is unsupported.',
       'CURRENT_COMMON_INPUT_EMPIRICAL_SUPPORT_METHOD_INVALID',
-      { value, allowed: [EMPIRICAL_LOAD_METHOD, EMPIRICAL_LOAD_COG_METHOD] },
+      { value, allowed: [...EMPIRICAL_SUPPORT_LOAD_METHODS] },
     );
   }
   return value;

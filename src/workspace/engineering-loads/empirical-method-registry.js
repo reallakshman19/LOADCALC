@@ -19,6 +19,17 @@ const METHODS = Object.freeze([
     resultClasses: ['VERTICAL_SCREENING_RESULT'],
     qualifiedDofs: ['VERTICAL_SCALAR'],
   }),
+  // Option B, owner-approved as empirical 2026-11-26: three-moment hand calc
+  // (Clapeyron, uniform EI, rigid one-way supports with lift-off) per route
+  // along plan length. Restricted domain: no per-span EI, riser joints rigid.
+  method({
+    methodId: 'CONTINUOUS_SPAN_THREE_MOMENT_V1',
+    purpose: 'CONTINUOUS_SPAN_VERTICAL_DISTRIBUTION',
+    runtimeStatus: 'REGISTERED',
+    qualificationStatus: 'QUALIFIED_RESTRICTED_DOMAIN',
+    resultClasses: ['VERTICAL_SCREENING_RESULT'],
+    qualifiedDofs: ['VERTICAL_SCALAR'],
+  }),
   method({
     methodId: 'EMPIRICAL_BEAM_CONTACT_V1',
     purpose: 'PLANAR_VERTICAL_BEAM_CONTACT_ACTIONS',

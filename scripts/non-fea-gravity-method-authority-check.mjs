@@ -14,6 +14,7 @@ import {
   NON_FEA_GRAVITY_METHOD_AUTO,
   NON_FEA_GRAVITY_METHOD_V2,
   NON_FEA_GRAVITY_METHOD_V3_COG,
+  NON_FEA_GRAVITY_METHOD_THREE_MOMENT,
   createNonFeaGravityMethodAuthority,
 } from '../src/workspace/project-data/non-fea-gravity-method-authority.js';
 import {
@@ -146,8 +147,8 @@ const governedV2Fallback = createGovernedEmpiricalGravityMethodSelection({
     record('VALVE-1', EMPIRICAL_COMPONENT_COG_CLASSIFICATION.MIDPOINT_FALLBACK),
   ], productAuthority.projectDataSemanticHash),
 });
-assert.equal(governedV2Fallback.selection.selectedMethod, NON_FEA_GRAVITY_METHOD_V2);
-assert.equal(governedV2Fallback.selection.selectionState, 'SELECTED_V2_MISSING_COG_FALLBACK');
+assert.equal(governedV2Fallback.selection.selectedMethod, NON_FEA_GRAVITY_METHOD_THREE_MOMENT);
+assert.equal(governedV2Fallback.selection.selectionState, 'SELECTED_THREE_MOMENT_MISSING_COG_FALLBACK');
 assert.equal(governedV2Fallback.selection.fallbackLedger[0].permittedByPolicy, true);
 assert.equal(governedV2Fallback.selection.fallbackLedger[0].componentCogFallbackPolicy,
   productCogFallbackPolicy);

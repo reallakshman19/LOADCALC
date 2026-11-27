@@ -22,6 +22,7 @@ import { getEmpiricalMethodRegistration } from './empirical-method-registry.js';
 import {
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 } from './support-load-distribution-v3.js';
 
 export const EMPIRICAL_GRAVITY_AUTO = NON_FEA_GRAVITY_METHOD_AUTO;
@@ -36,7 +37,11 @@ const ALLOWED_REQUESTS = Object.freeze([
   EMPIRICAL_GRAVITY_AUTO,
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 ]);
+// AUTO picks the three-moment method (Option B) wherever V2's input domain
+// applies: same masses and midpoint application points, continuous spans.
+const AUTO_MIDPOINT_METHOD = EMPIRICAL_LOAD_THREE_MOMENT_METHOD;
 
 export function evaluateEmpiricalGravityMethodSelection(input = {}) {
   const requestedMethod = methodRequest(input.requestedMethod ?? EMPIRICAL_GRAVITY_AUTO);
@@ -297,8 +302,8 @@ function autoChoice(state) {
   }
   if (state.componentCount === 0) {
     return deepFreeze({
-      selectedMethod: EMPIRICAL_LOAD_METHOD,
-      selectionState: 'SELECTED_V2_NO_COG_FIDELITY_GAIN',
+      selectedMethod: AUTO_MIDPOINT_METHOD,
+      selectionState: 'SELECTED_THREE_MOMENT_NO_COG_FIDELITY_GAIN',
       assumptions: [],
     });
   }
@@ -316,15 +321,15 @@ function autoChoice(state) {
   }
   if (state.retainedExplicitMomentCount > 0) {
     return deepFreeze({
-      selectedMethod: EMPIRICAL_LOAD_METHOD,
-      selectionState: 'SELECTED_V2_EXPLICIT_MOMENT_RETAINED_SEPARATELY',
+      selectedMethod: AUTO_MIDPOINT_METHOD,
+      selectionState: 'SELECTED_THREE_MOMENT_EXPLICIT_MOMENT_RETAINED_SEPARATELY',
       assumptions: midpointAssumptions(state.missingCogIds),
     });
   }
   if (state.missingCogCount > 0) {
     return deepFreeze({
-      selectedMethod: EMPIRICAL_LOAD_METHOD,
-      selectionState: 'SELECTED_V2_MISSING_COG_FALLBACK',
+      selectedMethod: AUTO_MIDPOINT_METHOD,
+      selectionState: 'SELECTED_THREE_MOMENT_MISSING_COG_FALLBACK',
       assumptions: midpointAssumptions(state.missingCogIds),
     });
   }
@@ -348,15 +353,17 @@ function explicitChoice(requestedMethod, state) {
     }
     return deepFreeze({ selectedMethod: requestedMethod, selectionState: 'EXPLICIT_V3_SELECTED', assumptions: [] });
   }
+  // V2 and the three-moment method share one input domain (midpoint rule).
+  const label = requestedMethod === EMPIRICAL_LOAD_THREE_MOMENT_METHOD ? 'THREE_MOMENT' : 'V2';
   if (state.hardExceptionCount > 0 || state.otherBlockedCount > 0) {
-    return deepFreeze({ selectedMethod: null, selectionState: 'EXPLICIT_V2_FALLBACK_PROHIBITED_BY_KNOWN_EVIDENCE', assumptions: [] });
+    return deepFreeze({ selectedMethod: null, selectionState: `EXPLICIT_${label}_FALLBACK_PROHIBITED_BY_KNOWN_EVIDENCE`, assumptions: [] });
   }
   return deepFreeze({
     selectedMethod: requestedMethod,
     selectionState: state.retainedExplicitMomentCount > 0
-      ? 'EXPLICIT_V2_SELECTED_WITH_SEPARATE_MOMENT_DEMAND'
-      : 'EXPLICIT_V2_SELECTED',
-    assumptions: midpointAssumptions(state.missingCogIds, true),
+      ? `EXPLICIT_${label}_SELECTED_WITH_SEPARATE_MOMENT_DEMAND`
+      : `EXPLICIT_${label}_SELECTED`,
+    assumptions: midpointAssumptions(state.missingCogIds, label),
   });
 }
 
@@ -376,6 +383,7 @@ function candidateRows(state, selectedMethod) {
       : 'READY';
   return deepFreeze([
     candidate(EMPIRICAL_LOAD_COG_METHOD, v3State, selectedMethod),
+    candidate(EMPIRICAL_LOAD_THREE_MOMENT_METHOD, v2State, selectedMethod),
     candidate(EMPIRICAL_LOAD_METHOD, v2State, selectedMethod),
     deepFreeze({
       methodId: BEAM_CONTACT,
@@ -390,12 +398,12 @@ function candidateRows(state, selectedMethod) {
 
 function fallbackRows(requestedMethod, state, choice, retention) {
   if (requestedMethod !== EMPIRICAL_GRAVITY_AUTO) return deepFreeze([]);
-  if (choice.selectedMethod === EMPIRICAL_LOAD_METHOD) {
+  if (choice.selectedMethod === AUTO_MIDPOINT_METHOD) {
     const rows = [];
     if (state.retainedExplicitMomentCount > 0) {
       rows.push({
         fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-        toMethod: EMPIRICAL_LOAD_METHOD,
+        toMethod: AUTO_MIDPOINT_METHOD,
         reasonCode: 'EXPLICIT_COMPONENT_MOMENT_RETAINED_SEPARATELY',
         affectedEntityIds: state.retainedExplicitMomentIds,
         permittedByPolicy: true,
@@ -405,7 +413,7 @@ function fallbackRows(requestedMethod, state, choice, retention) {
     if (state.missingCogCount > 0) {
       rows.push({
         fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-        toMethod: EMPIRICAL_LOAD_METHOD,
+        toMethod: AUTO_MIDPOINT_METHOD,
         reasonCode: 'COG_NOT_AVAILABLE',
         affectedEntityIds: state.missingCogIds,
         permittedByPolicy: true,
@@ -422,7 +430,7 @@ function fallbackRows(requestedMethod, state, choice, retention) {
     ) {
       return deepFreeze([{
         fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-        toMethod: EMPIRICAL_LOAD_METHOD,
+        toMethod: AUTO_MIDPOINT_METHOD,
         reasonCode: state.componentCogFallbackPolicy === NON_FEA_COMPONENT_COG_FALLBACK.DISABLED
           ? 'COG_FALLBACK_DISABLED_BY_POLICY'
           : 'COG_FALLBACK_POLICY_REQUIRED',
@@ -433,7 +441,7 @@ function fallbackRows(requestedMethod, state, choice, retention) {
     }
     return deepFreeze([{
       fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-      toMethod: EMPIRICAL_LOAD_METHOD,
+      toMethod: AUTO_MIDPOINT_METHOD,
       reasonCode: 'KNOWN_ECCENTRICITY_OR_UNQUALIFIED_COMPONENT_EVIDENCE',
       affectedEntityIds: state.blockingExceptionIds,
       permittedByPolicy: false,
@@ -442,12 +450,12 @@ function fallbackRows(requestedMethod, state, choice, retention) {
   return deepFreeze([]);
 }
 
-function midpointAssumptions(entityIds, explicitV2 = false) {
+function midpointAssumptions(entityIds, explicitLabel = null) {
   return entityIds.map((entityId) => deepFreeze({
     entityId,
     code: 'GEOMETRIC_MIDPOINT_APPLICATION',
-    reason: explicitV2
-      ? 'Explicit V2 uses the qualified midpoint application rule.'
+    reason: explicitLabel
+      ? `Explicit ${explicitLabel === 'V2' ? 'V2' : 'three-moment'} uses the qualified midpoint application rule.`
       : 'No qualified component CoG evidence is available and the governed fallback policy permits the geometric midpoint.',
   }));
 }

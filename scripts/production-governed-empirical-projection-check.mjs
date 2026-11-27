@@ -16,6 +16,7 @@ import {
 } from '../src/workspace/engineering-loads/production-governed-empirical-projection.js';
 import {
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 } from '../src/workspace/engineering-loads/support-load-distribution-v3.js';
 import {
   createEmptyProjectDataProfile,
@@ -103,10 +104,10 @@ assert.equal(
 );
 assert.equal(
   projection.governedSelection.selection.selectedMethod,
-  EMPIRICAL_LOAD_METHOD,
-  'No component CoG fidelity gain should deterministically select V2.',
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
+  'No component CoG fidelity gain: AUTO deterministically selects the three-moment method.',
 );
-assert.equal(projection.runtimePackage.method, EMPIRICAL_LOAD_METHOD);
+assert.equal(projection.runtimePackage.method, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
 assert.notEqual(projection.runtimePackage.method, NON_FEA_GRAVITY_METHOD_AUTO);
 assert.equal(projection.runtimePackage.packageId, legacyRuntimePackage.packageId);
 assert.equal(projection.runtimePackage.configuredAt, legacyRuntimePackage.configuredAt);

@@ -26,6 +26,7 @@ import {
 import {
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 } from '../src/workspace/engineering-loads/support-load-distribution-v3.js';
 
 const fallbackPath = 'loadCalculation.componentCogFallback';
@@ -84,8 +85,8 @@ const productSelection = createEmpiricalGravityMethodSelection({
   componentCogFallbackPolicy: productEntry.value,
   componentAuthorityAudit: audit([missingCogRecord]),
 });
-assert.equal(productSelection.selectedMethod, EMPIRICAL_LOAD_METHOD);
-assert.equal(productSelection.selectionState, 'SELECTED_V2_MISSING_COG_FALLBACK');
+assert.equal(productSelection.selectedMethod, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
+assert.equal(productSelection.selectionState, 'SELECTED_THREE_MOMENT_MISSING_COG_FALLBACK');
 assert.equal(productSelection.componentCogFallbackPolicy,
   NON_FEA_COMPONENT_COG_FALLBACK.GEOMETRIC_MIDPOINT);
 assert.equal(productSelection.policy.missingCogMayFallbackToV2, true);

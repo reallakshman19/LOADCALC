@@ -8,9 +8,8 @@ import {
   evaluateEmpiricalGravityMethodSelection,
 } from './empirical-gravity-method-selection.js';
 import {
-  EMPIRICAL_LOAD_METHOD,
   calculateSupportLoadDistribution,
-  calculateSupportLoadDistributionWithComponentCog,
+  calculateSupportLoadDistributionForMethod,
 } from './support-load-distribution-v3.js';
 
 /** Owns the last explicit engineering calculation and its edit freshness. */
@@ -30,7 +29,7 @@ export class EngineeringSupportLoadStore {
   }
 
   /**
-   * Selects V3_COG or V2 before execution. AUTO never catches a failed method
+   * Selects V3_COG or the three-moment method before execution. AUTO never catches a failed method
    * and tries a simpler one. A known eccentricity/moment exception stops here
    * until the partial-accounting mechanics can retain that evidence safely.
    */
@@ -53,9 +52,7 @@ export class EngineeringSupportLoadStore {
       error.details = selection;
       throw error;
     }
-    this.#distribution = selection.selectedMethod === EMPIRICAL_LOAD_METHOD
-      ? calculateSupportLoadDistribution(input)
-      : calculateSupportLoadDistributionWithComponentCog(input);
+    this.#distribution = calculateSupportLoadDistributionForMethod(selection.selectedMethod, input);
     return this.#distribution;
   }
 

@@ -16,6 +16,7 @@ import {
 import {
   EMPIRICAL_LOAD_COG_METHOD,
   EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
 } from '../src/workspace/engineering-loads/support-load-distribution-v3.js';
 import {
   renderEngineeringLoadPane,
@@ -61,16 +62,16 @@ const autoWithRetention = createEmpiricalGravityMethodSelection({
   componentAuthorityAudit: explicitAudit,
   explicitMomentRetention: retention,
 });
-assert.equal(autoWithRetention.selectedMethod, EMPIRICAL_LOAD_METHOD);
+assert.equal(autoWithRetention.selectedMethod, EMPIRICAL_LOAD_THREE_MOMENT_METHOD);
 assert.equal(autoWithRetention.selectionState,
-  'SELECTED_V2_EXPLICIT_MOMENT_RETAINED_SEPARATELY');
+  'SELECTED_THREE_MOMENT_EXPLICIT_MOMENT_RETAINED_SEPARATELY');
 assert.equal(autoWithRetention.explicitMomentRetentionSemanticHash, retention.semanticHash);
 assert.equal(autoWithRetention.retainedDemandLedger.length, 1);
 assert.equal(autoWithRetention.retainedDemandLedger[0].verticalReactionDistribution,
   'NOT_PERFORMED');
 assert.deepEqual(autoWithRetention.fallbackLedger, [{
   fromMethod: EMPIRICAL_LOAD_COG_METHOD,
-  toMethod: EMPIRICAL_LOAD_METHOD,
+  toMethod: EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
   reasonCode: 'EXPLICIT_COMPONENT_MOMENT_RETAINED_SEPARATELY',
   affectedEntityIds: ['VALVE-M1'],
   permittedByPolicy: true,
