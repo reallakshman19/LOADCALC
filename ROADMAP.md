@@ -273,6 +273,47 @@ What-if, ΔT = 100 °C on every line (computed in the page, not saved):
 
 Hand check PS-12268: 6″ wall 14.27 mm, I = 2.066×10⁷ mm⁴, 3 × 203,000 × 2.066×10⁷ × 2.65 / 3,550³ = 745 N.
 
+#### Line temperatures from the Line List (2026-11-27)
+
+The app's Line List master already reads the client Line List .xlsx (kept out of git; excluded locally in `.git/info/exclude`). The auto-mapping keys on Service + Line number (e.g. S + 8811951 = S8811951, as in the model's branch names) and maps:
+- T2 = AT WORKING CONDITIONS Temp. ºC (operating)
+- T1 = DESIGN CONDITIONS Temp Max ºC
+- insulation thickness, and the mixed / gas / liquid densities
+
+The key needs the service letter, because W8810111 and W8810112 exist too.
+
+- `src/workspace/support-sites/line-list-temperatures.js`: the thermal checks (friction movement state, guide bounds) use each model line's **T2 operating temperature** from the Line List, unless Project Data sets that line itself. Lines not in the Line List keep Project Data's DEFAULT.
+- This follows Project Data's own evidence note ("line-list master takes precedence for hot lines"). It is a view for these checks only; Project Data is not changed.
+- A line listed twice with different temperatures is not used.
+- The Results page lists the temperatures used and where each came from. Test: `tests/line-list-temperatures.test.mjs`.
+
+1885S Line List, all 5 steam lines (S, phase M):
+
+| Line | NPS | Operating T2 | Design T1 max | Insulation (HC) | Mixed density |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| S8810101 | 10″ | 309 °C | 325 °C | 120 mm | 67 kg/m³ |
+| S8810103 | 8″ | 309 °C | 325 °C | 100 mm | 67 kg/m³ |
+| S8810111, S8810112, S8811951 | 6″ | 309 °C | 325 °C | 80 mm | 67 kg/m³ |
+
+Browser Run with the real Line List in place of the sample CSV (2026-11-27):
+- **EMPTY / OPE / HYD:** 87.6 / **88.7** / 104.0 kN; equilibrium PASSED, coverage 100 %.
+- **Why OPE dropped:** OPE falls from 100.4 kN because the sample CSV gave 67 kg/m³ only for S8811951, so the other 4 lines used the 1,000 kg/m³ fallback (a SAMPLE ASSUMPTION). The Line List gives 67 kg/m³ for all 5.
+- **Insulation:** still 0 mm, because the 1885S Project Data default (SAMPLE ASSUMPTION) takes priority over the Line List thickness. Owner decision pending.
+- **Friction:** total design friction is 21,336 N over 25 sliding supports.
+- **Line stop design axial (friction part):** PS-12248 4,494 N; PS-12060 2,065; PS-12240 1,126; PS-12034 (8″) 1,018; PS-12169 809; PS-12034 (6″) 578; PS-12295 545; PS-12231 443; PS-12268 255; PS-12243 and PS-12166 0.
+- **Guides (SCREENING) at ΔT = 309 − 21 = 288 °C:**
+
+| Guide | Δ (mm) | Lower – upper (N) |
+| --- | ---: | ---: |
+| PS-12268 | 7.63 | 2,144 – 8,578 |
+| PS-12242 | 2.16 | 496 – 1,984 |
+| PS-12248 | 1.01 | 3 – 153 |
+| PS-12034, PS-12169, PS-12060 | riser | 0 |
+
+Hand check: PS-12268, Δ = 1.17×10⁻⁵ × 288 × 2,263 = 7.63 mm; lower = 745 N × 2.88 = 2,145 N.
+
+**Open: α at temperature.** Project Data's α = 1.17×10⁻⁵ /°C is labelled "at 21 °C". The mean coefficient from 21 °C to 309 °C for carbon steel is higher (to be confirmed from ASME B31.3 Appendix C). Growth, and so the guide bounds, scale with it.
+
 #### First benchmark results review (2026-11-26)
 
 Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.

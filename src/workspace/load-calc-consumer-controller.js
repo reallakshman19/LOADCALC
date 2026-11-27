@@ -39,6 +39,7 @@ import { buildSupportRestraintTable } from './support-sites/support-restraint-ta
 import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
 import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
 import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lateral-loads.js';
+import { withLineListOperatingTemperatures } from './support-sites/line-list-temperatures.js';
 import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
@@ -835,19 +836,27 @@ function currentFrictionLoads(distribution) {
       routePartitionModel,
       profile,
     });
-    friction = buildSupportFrictionLoads({ restraintTable, distribution, profile });
+    // Thermal checks use the Line List's operating temperature per line where
+    // Project Data does not set that line itself (a view; Project Data unchanged).
+    const thermal = withLineListOperatingTemperatures(
+      profile,
+      masterDataController.getMasterData()?.lineList?.normalizedRows,
+      [...new Set((routePartitionModel?.routes || []).map((route) => route.lineKey).filter(Boolean))],
+    );
+    friction = buildSupportFrictionLoads({ restraintTable, distribution, profile: thermal.profile });
     const routeLegs = buildRouteLegs({ routePartitionModel, profile });
     const lineStops = buildSupportLineStopLoads({ restraintTable, frictionLoads: friction, routeLegs });
     let guides = null;
     try {
       guides = buildSupportGuideLateralLoads({
-        restraintTable, routeLegs, distribution, profile,
+        restraintTable, routeLegs, distribution, profile: thermal.profile,
         pipeSections: currentPipeSections(routePartitionModel),
       });
     } catch (error) {
       console.warn('Guide lateral loads not shown:', error);
     }
-    return Object.freeze({ ...friction, lineStops, guides });
+    const temperatureSource = { source: thermal.source, appliedByLine: thermal.applied, conflicts: thermal.conflicts };
+    return Object.freeze({ ...friction, lineStops, guides, temperatureSource });
   } catch (error) {
     console.warn('Friction or line stop loads not shown:', error);
     return friction;

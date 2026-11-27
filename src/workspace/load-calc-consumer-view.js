@@ -665,7 +665,7 @@ function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
     <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th>${frictionHead}<th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
     <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td>${frictionCells(row.supportSiteId)}<td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
     ${friction ? lineStopMarkup(frictionLoads.lineStops, acceptedCurrent) : ''}
-    ${friction ? guideMarkup(frictionLoads.guides, acceptedCurrent) : ''}
+    ${friction ? guideMarkup(frictionLoads.guides, acceptedCurrent, frictionLoads.temperatureSource) : ''}
     <details ${loadCase.status === 'CALCULATED_WITH_EXCEPTIONS' ? 'open' : ''}><summary>Exceptions (${integer(loadCase.exceptionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.exceptionLedger || [], null, 2))}</pre></details>
     <details><summary>Contribution ledger (${integer(loadCase.contributionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.contributionLedger || [], null, 2))}</pre></details>
     <details><summary>Excluded inputs (${integer(loadCase.excludedInputs?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.excludedInputs || [], null, 2))}</pre></details>
@@ -696,8 +696,17 @@ function lineStopMarkup(lineStops, accepted) {
 }
 
 // Guide lateral loads from thermal growth, guided cantilever (plan step 7).
-function guideMarkup(guides, accepted) {
+function guideMarkup(guides, accepted, temperatureSource = null) {
   if (!guides?.rows?.length) return '';
+  const temps = guides.thermal?.operatingTemperaturesC || {};
+  const fromLineList = temperatureSource?.appliedByLine || {};
+  const tempText = Object.entries(temps)
+    .map(([key, value]) => `${key} ${value} °C${Object.hasOwn(fromLineList, key) ? ' (Line List)' : ' (Project Data)'}`)
+    .join(', ');
+  const conflictText = temperatureSource?.conflicts?.length
+    ? ` Not used, Line List gives different temperatures: ${temperatureSource.conflicts.join(', ')}.`
+    : '';
+  const temperatureNote = `<p class="guide-temperatures" data-temperature-source="${escapeHtml(temperatureSource?.source || 'PROJECT_DATA')}">Operating temperatures: ${escapeHtml(tempText)}; installation ${escapeHtml(String(guides.thermal?.installationTemperatureC ?? '—'))} °C.${escapeHtml(conflictText)}</p>`;
   const tagOf = (row) => row.tags?.find((tag) => tag.startsWith('PS-')) || row.tags?.[0] || row.siteId;
   const endText = (end) => {
     if (end.status === 'SHIELDED') return 'shielded by a guide nearer the elbow';
@@ -719,6 +728,7 @@ function guideMarkup(guides, accepted) {
     : '';
   return `<h3>Guides: lateral load from thermal growth (SCREENING bounds)</h3>
     <p class="guide-basis">${escapeHtml(guides.basis)} ${escapeHtml(note)}</p>
+    ${temperatureNote}
     <table class="guide-lateral-loads"><thead><tr><th>Guide</th><th>Type</th><th>Lower bound (N)</th><th>Upper bound (N)</th><th>Basis</th><th>Too close to elbow?</th></tr></thead>
     <tbody>${body}</tbody></table>`;
 }

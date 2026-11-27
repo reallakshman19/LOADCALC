@@ -140,6 +140,7 @@ These follow [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.
 2. legs and free growth: **legs done 2026-11-27** (`src/workspace/routes/route-legs.js`); free growth waits for real temperatures (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
 3. friction (ACCURATE): **design friction μ × N_OPE done 2026-11-27** (`src/workspace/support-sites/support-friction-loads.js`, shown in the Results OPE table via `currentFrictionLoads()` in `load-calc-consumer-controller.js`); movement-based friction needs free growth and neutral points
 4. line stop axial: **friction part done 2026-11-27** (`src/workspace/support-sites/support-line-stop-loads.js`, Results page under the OPE table; design = larger side). The push from adjacent legs (SCREENING) needs temperatures
+Line temperatures: **from the Line List master since 2026-11-27** (`src/workspace/support-sites/line-list-temperatures.js`; T2 operating, per Service + Line number; Project Data per-line values win). 1885S steam lines: 309 °C operating, 325 °C design.
 5. guide lateral (SCREENING bounds): **done 2026-11-27** (`src/workspace/support-sites/support-guide-lateral-loads.js`, Results page). 0 on 1885S until line temperatures are given; the too-close flag needs guide capacities (`restraintPolicy.guideLateralCapacityN`)
 6. optional wind/seismic
 7. tests and cross-check against `src/core/empirical-piping-mechanics/thermal-restraint-compatibility.js` on simple L and Z cases

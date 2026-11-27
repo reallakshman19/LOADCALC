@@ -68,7 +68,7 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 3. **1885S**: a CAESAR II run (or similar) gives the real accuracy figure for each label.
 
 ## 4. 1885S data gaps (blockers)
-- **Operating temperatures**: Project Data has `operatingTemperaturesC = { DEFAULT: 21 }`, which equals the installation temperature, so ΔT = 0 and every thermal and movement-based friction load is zero. The source calls 11 supports "Directional Anchor On Shoe for **Hot Insulated** Pipe", so real temperatures per line are needed.
+- **Operating temperatures**: **resolved 2026-11-27**. The thermal checks use the Line List master's operating temperature (T2) per line: 309 °C for the 5 steam lines (design 325 °C). Before that, Project Data had `operatingTemperaturesC = { DEFAULT: 21 }`, which equals the installation temperature, so ΔT was 0. The source calls 11 supports "Directional Anchor On Shoe for **Hot Insulated** Pipe", so real temperatures per line are needed.
 - **Support functions**: 91 REST, 11 LINESTOP (the ST06 directional anchors), 6 GUIDE (GT01 family) and 31 parts with a blank SUPPORT_TYPE. **Resolved 2026-11-26:** 25 of the 31 are frame parts on supports that already have a typed part; the owner set PS-12297 = REST and the other 5 to NONE, and PS-12248's line stop part was merged into its support.
 - **Friction**: μ 0.3 (steel) and 0.1 (PTFE) are approved defaults; which supports have PTFE slide plates is not known.
 - **Occasional loads**: wind or seismic g-factors, only if the project wants them.
