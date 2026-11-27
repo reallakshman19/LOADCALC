@@ -266,6 +266,7 @@ export function renderEngineeringLoadPane(
   routePartitionModel,
   authorizedExecution = null,
   authorizationState = null,
+  frictionLoads = null,
 ) {
   if (!container) return;
   container.innerHTML = `${contractSummary(
@@ -274,7 +275,7 @@ export function renderEngineeringLoadPane(
     routePartitionModel,
     authorizedExecution,
     authorizationState,
-  )}${caseMarkup(distribution, supportSiteModel)}`;
+  )}${caseMarkup(distribution, supportSiteModel, frictionLoads)}`;
 }
 
 export function renderLoadCalcTopologyPane(
@@ -635,18 +636,34 @@ function authorizationDetails(state) {
   return `<details ${state.calculationEligible ? '' : 'open'} class="empirical-authorization-state"><summary>${escapeHtml(state.state)}${state.reasonCode ? ` — ${escapeHtml(state.reasonCode)}` : ''}</summary>${details}</details>`;
 }
 
-function caseMarkup(distribution, supportSiteModel) {
+function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
   if (!distribution?.loadCases?.length) return '<p class="panel-empty">A current authorized empirical package is required before calculation.</p>';
   const primaryBySite = new Map((supportSiteModel?.sites || []).map((site) => [site.siteId, site.primaryEntityId]));
   const current = distribution.freshness?.status === 'CURRENT';
   return distribution.loadCases.map((loadCase) => {
     const acceptedCurrent = current && isPublishableCaseStatus(loadCase.status);
+    // Friction (design, mu x N_OPE) is shown in the operating case only.
+    const friction = frictionLoads?.loadCaseId === loadCase.loadCaseId && frictionLoads.status === 'CALCULATED'
+      ? new Map(frictionLoads.rows.map((row) => [row.siteId, row]))
+      : null;
+    const frictionHead = friction ? '<th>Type</th><th>Friction, design μ·N (N, ACCURATE)</th><th>Friction acts</th>' : '';
+    const frictionCells = (siteId) => {
+      if (!friction) return '';
+      const row = friction.get(siteId);
+      if (!row) return '<td>—</td><td>—</td><td>—</td>';
+      const acts = row.directions.length ? row.directions.map((d) => (d === 'AXIAL' ? 'along pipe' : 'across pipe')).join(' or ') : 'none (held)';
+      return `<td>${escapeHtml(row.code)}</td><td>${row.designFrictionN === null ? '—' : force(row.designFrictionN, acceptedCurrent)}</td><td>${row.designFrictionN === null ? '—' : escapeHtml(row.designFrictionN > 0 ? `${acts} (μ ${row.mu})` : acts)}</td>`;
+    };
+    const frictionNote = friction
+      ? `<p class="friction-basis" data-friction-movement="${escapeHtml(frictionLoads.movement?.state || '')}">Friction: ${escapeHtml(frictionLoads.basis)} ${escapeHtml(frictionLoads.movement?.reason || '')} Total design friction ${force(frictionLoads.summary.totalDesignFrictionN, acceptedCurrent)} N over ${integer(frictionLoads.summary.slidingSiteCount)} sliding supports.</p>`
+      : '';
     return `<section class="load-case-evidence" data-load-case-status="${escapeHtml(loadCase.status)}">
     <h2>${escapeHtml(loadCase.loadCaseId)} <span>${escapeHtml(loadCase.status)}${current ? '' : ' / STALE'}</span></h2>
     ${completenessMarkup(loadCase.completenessAudit, loadCase.status, current)}
     ${blockerMarkup(loadCase.blockers)}
-    <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th><th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
-    <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
+    ${frictionNote}
+    <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th>${frictionHead}<th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
+    <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td>${frictionCells(row.supportSiteId)}<td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
     <details ${loadCase.status === 'CALCULATED_WITH_EXCEPTIONS' ? 'open' : ''}><summary>Exceptions (${integer(loadCase.exceptionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.exceptionLedger || [], null, 2))}</pre></details>
     <details><summary>Contribution ledger (${integer(loadCase.contributionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.contributionLedger || [], null, 2))}</pre></details>
     <details><summary>Excluded inputs (${integer(loadCase.excludedInputs?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.excludedInputs || [], null, 2))}</pre></details>

@@ -206,6 +206,14 @@ Owner decisions (2026-11-26), stored in Project Data with that evidence:
 
 Not built yet: a review screen for the table in the app (today it is a script and a data module).
 
+#### Friction loads (guide / line stop plan, step 3, 2026-11-27)
+
+`src/workspace/support-sites/support-friction-loads.js`: **design friction = μ × N_OPE** at each sliding support, in each horizontal direction the restraint table leaves free (R: along or across the pipe; R+G: along; R+LS: across; R+G+LS: none). It is the most friction can be in any one direction; along and across are alternatives (their vector sum is at most μN). Label ACCURATE (owner decision), so it is only as good as the vertical result and μ. Shown on the Results page in the OPE table (columns Type, Friction, Friction acts). Test: `tests/support-friction-loads.test.mjs`.
+
+Movement-based friction (zero where the pipe does not move) is reported as 0 while every operating temperature equals installation (21 °C now); with real temperatures it needs leg growth and neutral points (steps 2 and 4) and shows as not built.
+
+1885S OPE (browser Run 2026-11-27): 25 sliding supports, total design friction 24,073 N; equilibrium PASSED and coverage 100 % unchanged. Hand checks: PS-12059 R 0.3 × 8,234 = 2,470 N; PS-12242 R+G 751 N along the pipe; PS-12243 R+LS 811 N across; PS-12060 R+G+LS 0 N; lifted-off PS-12249 0 N. μ is the 0.3 default everywhere until PTFE plates are known.
+
 #### First benchmark results review (2026-11-26)
 
 Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.

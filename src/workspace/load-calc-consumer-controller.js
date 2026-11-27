@@ -35,6 +35,8 @@ import {
   TOPOLOGY_EDIT_DEFAULT_AUTOFIX_GAP_MM,
 } from './topology-edit/topology-edit-gap-autofix-policy.js';
 import { SUPPORT_RESTRAINT_EVENTS } from './support-restraint-events.js';
+import { buildSupportRestraintTable } from './support-sites/support-restraint-table.js';
+import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
 const EMPIRICAL_SCENARIO_VIEW_TABS = new Set([
@@ -504,6 +506,7 @@ export class LoadCalcConsumerController {
       engineeringModelStore.getAuthorizedExecution(),
       authorizationState,
       currentCommonInputExecution,
+      currentFrictionLoads(engineeringModelStore.getDistribution()),
     );
     else this.renderDeferredPane(this.activeTab, pane, revision);
   }
@@ -819,6 +822,25 @@ export class LoadCalcConsumerController {
  * Projects read-only progress for the guided UI. It never supplies missing
  * values or changes the stores that own engineering readiness and authority.
  */
+// Design friction (guide / line stop plan, step 3) for the Results table. An
+// extra view on the vertical Run: a failure here hides the friction columns
+// and never blocks the Results page.
+function currentFrictionLoads(distribution) {
+  if (!distribution?.loadCases?.length) return null;
+  try {
+    const profile = projectDataStore.getProfile();
+    const restraintTable = buildSupportRestraintTable({
+      supportSiteModel: engineeringModelStore.getSupportSiteModel(),
+      routePartitionModel: engineeringModelStore.getRoutePartitionModel(),
+      profile,
+    });
+    return buildSupportFrictionLoads({ restraintTable, distribution, profile });
+  } catch (error) {
+    console.warn('Friction loads not shown:', error);
+    return null;
+  }
+}
+
 function createWorkflowReadiness(context, topologyCheck) {
   const supportSites = engineeringModelStore.getSupportSiteModel();
   const routes = engineeringModelStore.getRoutePartitionModel();

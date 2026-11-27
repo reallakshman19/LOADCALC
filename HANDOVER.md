@@ -138,7 +138,7 @@ In `support-load-distribution-v3.js`, `calculateRoute()`:
 These follow [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md):
 1. restraint table: **done 2026-11-26** (`src/workspace/support-sites/support-restraint-table.js`, `node benchmarks/checks/1885s-restraint-table.mjs`); an in-app review screen is still to do
 2. legs and free growth (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
-3. friction (ACCURATE)
+3. friction (ACCURATE): **design friction μ × N_OPE done 2026-11-27** (`src/workspace/support-sites/support-friction-loads.js`, shown in the Results OPE table via `currentFrictionLoads()` in `load-calc-consumer-controller.js`); movement-based friction needs steps 2 and 4
 4. line stop axial
 5. guide lateral (SCREENING bounds)
 6. optional wind/seismic

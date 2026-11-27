@@ -103,6 +103,7 @@ export function renderEngineeringLoadPane(
   authorizedExecution = null,
   authorizationState = null,
   currentCommonInputExecution = null,
+  frictionLoads = null,
 ) {
   if (!currentCommonInputExecution) {
     renderLegacyEngineeringLoadPane(
@@ -112,6 +113,7 @@ export function renderEngineeringLoadPane(
       routePartitionModel,
       authorizedExecution,
       authorizationState,
+      frictionLoads,
     );
     return;
   }
@@ -132,6 +134,7 @@ export function renderEngineeringLoadPane(
     routePartitionModel,
     null,
     systemState,
+    frictionLoads,
   );
   const legacyAuthority = /<p data-empirical-authority="UNAUTHORIZED_LEGACY_RESULT">[\s\S]*?<\/p>/u;
   if (!legacyAuthority.test(container.innerHTML)) {
