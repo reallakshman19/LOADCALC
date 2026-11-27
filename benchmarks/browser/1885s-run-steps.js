@@ -74,8 +74,11 @@ if (d) for (const c of d.loadCases) {
   };
 }
 out;
-// Expected (2026-11-26, commit 0cd2a79): EMPTY / OPE / HYD applied 87.6 / 100.4 / 104.0 kN,
-// equilibrium PASSED, coverage 100 %, 83 × OVERHANG_CANTILEVER_TRANSFER, 2 × BRANCH_LOAD_TRANSFERRED_TO_HOST.
+// Expected (2026-11-26, method CONTINUOUS_SPAN_THREE_MOMENT_V1 = Option B, the AUTO default):
+// EMPTY / OPE / HYD applied 87.6 / 100.4 / 104.0 kN, equilibrium PASSED, coverage 100 %,
+// 37 × OVERHANG_CANTILEVER_TRANSFER (single-support routes), 2 × BRANCH_LOAD_TRANSFERRED_TO_HOST,
+// 1 × SUPPORT_LIFTOFF_RELEASED (S8811951/B2 at 11,260 mm).
+// Before B (commit 0cd2a79, V2): same totals, 83 × OVERHANG_CANTILEVER_TRANSFER.
 
 // ---- Step 7 (UNTESTED helper): export one route's loads in the benchmarks/checks/route-b2-data.mjs format
 const rp = AnalysisWorkspace.getRoutePartitionModel();

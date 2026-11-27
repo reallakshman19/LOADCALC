@@ -76,7 +76,7 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 ## 5. Build order
 | # | Work | Depends on | Output label |
 | --- | --- | --- | --- |
-| 0 | Option A (overhang moment) + Option B (three-moment with lift-off) for vertical loads | — | ACCURATE |
+| 0 | Option B (three-moment with lift-off) for vertical loads. **Done 2026-11-26**, in the Run as CONTINUOUS_SPAN_THREE_MOMENT_V1 | — | ACCURATE |
 | 1 | Restraint table proposal and support-function mapping | — | data |
 | 2 | Leg decomposition and free growth (reuse thermal-free-movement) | 1, temperatures | data |
 | 3 | Friction loads, movement-based and design | 0, 2 | ACCURATE |

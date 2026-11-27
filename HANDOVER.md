@@ -22,7 +22,8 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 | 2026-11-26 | Zero-length branches attach to their host pipe. |
 | 2026-11-26 | Insulation thickness 0 mm, as a SAMPLE ASSUMPTION (`1885S_INSULATION_THICKNESS_SAMPLE_ZERO` in `project-data/1885s-project-data-profile.json`). |
 | 2026-11-26 | **Accuracy target 90 %:** each support's vertical load within about 10 % of a stiffness-based reference. |
-| 2026-11-26 | **No beam solver / FE.** A whole-system stiffness solve is LFEA scope. Improve the *empirical* calculation instead. The three-moment hand calc (Option B) was proposed as empirical. The owner then asked how to do guide and line stop loads and for this handover, but **has not yet explicitly approved building B**. Confirm with one question before wiring it into the Run. |
+| 2026-11-26 | **No beam solver / FE.** A whole-system stiffness solve is LFEA scope. Improve the *empirical* calculation instead. |
+| 2026-11-26 | **Option B approved as empirical** (three-moment hand calc with lift-off). Wired into the Run as `CONTINUOUS_SPAN_THREE_MOMENT_V1`, the AUTO default; V2 stays selectable. Weight and friction results are labelled ACCURATE; guide / line stop thermal results are SCREENING bounds only. |
 
 **Never commit** client documents. The client Line List `.xlsx` lives outside the repo; only the derived sample CSV is committed. Never commit secrets either. Keep the owner's personal details out of commits and external requests.
 
@@ -61,8 +62,11 @@ The Phase 1 goal was the 1885S Run reaching Results. **That is done.**
 | V2 tributary (what the Run uses now) | +1.8 % | +41.8 % | −19.8 % | +12.7 % | 1,859 N | −22.5 % |
 | **A** lever + overhang moment | +8.3 % | +31.9 % | −19.8 % | +12.7 % | 145 N | +0.9 % |
 | **B** three-moment + lift-off | +0.2 % | −0.8 % | +0.1 % | 0.0 % | 0 | 0.0 % |
+| **B in the Run** (since step 0) | +0.2 % | −0.7 % | +0.1 % | +0.3 % | 0 | −0.1 % |
 
 The large V2 errors come from two heavy items: the 697 kg instrument at about 6.7 m and the 408 kg end valve at about 16.3 m. Their effect reaches across several spans, so a correction that only looks at neighbouring spans cannot fix it.
+
+**Step 0 is done (2026-11-26):** the Run uses B. The browser benchmark still passes equilibrium with 100 % coverage in EMPTY / OPE / HYD. Per-support numbers for all 1885S routes, V2 vs B, are in ROADMAP.md ("Option B in the Run").
 
 ## 5. Load Calc pipeline map (what Run executes)
 
@@ -76,12 +80,13 @@ The steps below are the 8-step UI process: Dataset, Topology review, Master Data
 4. **Routes:** `src/workspace/routes/route-partition-model.js`. Routes are branch-scoped with chainage; `attachPointOnlyRoutes` attaches zero-length branches to their host.
 5. **Masters → proposals → accept:** `src/workspace/load-calc-master-candidates.js` and the enrichment views. Project Data is in `project-data/1885s-project-data-profile.json`; configured defaults are under `qualificationPolicy.configuredDefaults.defaults`.
 6. **Input Check / Seal:** `src/core/non-fea-common-checker/`, `src/workspace/non-fea-input-check-view.js`.
-7. **Run:** `src/workspace/engineering-model-controller.js` (`calculateCurrentCommonInput`) → `src/workspace/engineering-loads/current-common-input-empirical-mass-projection.js` (mass and CoG fallback) → **`src/workspace/engineering-loads/support-load-distribution-v3.js`** (method CHAINAGE_TRIBUTARY_SPAN_V2).
-   - `calculateRoute()` (around line 348) allocates each entity with `allocateSupportUniformLoad` (pipes) or `allocateSupportPointLoad` (points), from `support-load-static-accounting.js`.
-   - `recordContribution()` writes the per-entity audit ledger.
-   - Branch transfer: `attachBranchTransfers` / `applyBranchTransfer`.
+7. **Run:** `src/workspace/engineering-model-controller.js` (`calculateCurrentCommonInput`) → `src/workspace/engineering-loads/current-common-input-empirical-mass-projection.js` (mass and CoG fallback) → **`src/workspace/engineering-loads/support-load-distribution-v3.js`** (method CONTINUOUS_SPAN_THREE_MOMENT_V1 by default; V2 and V3_COG selectable).
+   - Every caller dispatches through `calculateSupportLoadDistributionForMethod` / `...FromQualifiedCaseMassesForMethod`; the method list is `EMPIRICAL_SUPPORT_LOAD_METHODS`.
+   - `calculateRoute()` pass 1 collects each entity's load. V2 / V3_COG then allocate each one with `allocateSupportUniformLoad` / `allocateSupportPointLoad` (`support-load-static-accounting.js`). B calls `calculateRouteContinuousSpan()`: one `solveContinuousSpan` per route and case along plan length (`routePlanLengthMap`), then each load's share goes to the ledger.
+   - `recordContribution()` writes the per-entity audit ledger. With B, first moments are taken along plan length (route check `momentReference: ROUTE_PLAN_LENGTH_ORIGIN`).
+   - Branch transfer: `attachBranchTransfers` / `releaseBranchTransfer`. With B, branch routes are solved first and their load joins the host route's solve; V2 keeps `applyBranchTransfer` after the host.
    - `equilibriumCheck` / `completenessAudit` net out `transferForceN`.
-8. **Method registry:** `src/workspace/engineering-loads/empirical-method-registry.js`.
+8. **Method registry:** `src/workspace/engineering-loads/empirical-method-registry.js`. Adding a vertical method also needs: `IMPLEMENTATION_BINDINGS` (`src/core/non-fea-method-consumption`), `IMPLEMENTATION_FOUNDATION_CAPABILITIES` (`src/core/non-fea-engineering-foundation/handoff.js`), `EMPIRICAL_ANALYSIS_METHODS` (contracts), `NON_FEA_GRAVITY_METHOD_REQUEST_IDS` (Project Data) and the choice rules in `empirical-gravity-method-selection.js`.
 9. **Browser API (for checks):**
    - `AnalysisWorkspace.getEngineeringSupportLoadDistribution()`
    - `AnalysisWorkspace.getRoutePartitionModel()`
@@ -93,7 +98,7 @@ The steps below are the 8-step UI process: Dataset, Topology review, Master Data
 
 | File | What it gives you | Status |
 | --- | --- | --- |
-| `src/core/empirical-continuous-span/index.js` | `solveContinuousSpan({ supports, loads, method, liftOff })`. Methods `LEVER_OVERHANG_MOMENT_V1` (A) and `THREE_MOMENT_LIFTOFF_V1` (B). Exact uniform-load integration, an active set for lift-off and re-contact, coincident supports merged into one station (reaction split equally), and **per-load contributions** that sum to the total. | Tested (`tests/empirical-continuous-span.test.mjs`: textbook 2- and 3-span cases, point-load lift-off, overhang, coincident supports, and B2 within 1 % of the beam). Not wired. |
+| `src/core/empirical-continuous-span/index.js` | `solveContinuousSpan({ supports, loads, method, liftOff })`. Methods `LEVER_OVERHANG_MOMENT_V1` (A) and `THREE_MOMENT_LIFTOFF_V1` (B). Exact uniform-load integration, an active set for lift-off and re-contact, coincident supports merged into one station (reaction split equally; `stationChainageBySiteId`), and **per-load contributions** that sum to the total. | Tested (`tests/empirical-continuous-span.test.mjs`). **B wired into the Run** (`tests/support-load-three-moment.test.mjs`). |
 | `src/core/empirical-restraint-loads/index.js` | Pipe I and A, free growth α·ΔT·L, guided-cantilever bounds (3 and 12·EIΔ/L³), fully restrained E·A·α·ΔT, design friction μN, friction neutral point, line stop held friction. | Tested (`tests/empirical-restraint-loads.test.mjs`). Not wired. |
 | `benchmarks/checks/route-b2-data.mjs` | B2 loads, supports, V2 results and the beam reference. | Data. |
 | `benchmarks/checks/route-b2-empirical-methods.mjs` | Comparison table: V2 vs A vs B. | Runs. |
@@ -101,7 +106,13 @@ The steps below are the 8-step UI process: Dataset, Topology review, Master Data
 
 ## 7. Next work, in order
 
-### Step 0: wire A + B into the Run (after the owner confirms B)
+### Step 0: wire B into the Run (DONE 2026-11-26)
+Built as planned below, with these choices:
+- Risers: spans are measured along plan length (running horizontal distance) instead of splitting the route. A vertical leg has zero span length, so its weight lands at the joint and a support on it acts there. No threshold is needed; sloped lines scale by cos(slope).
+- A route with fewer than two bearing supports keeps the V2 bookkeeping. A route that cannot be resolved falls back to V2 with `CONTINUOUS_SPAN_UNRESOLVED_TRIBUTARY_FALLBACK`.
+- AUTO now picks B wherever it used to pick V2. Option A was not wired (it misses 90 %).
+
+The original plan, for reference:
 In `support-load-distribution-v3.js`, `calculateRoute()`:
 1. **Pass 1:** collect each qualified entity's load. A pipe becomes `{ startMm, endMm, forceN }` from its chainage row; everything else becomes `{ chainageMm: application.chainageMm, forceN }`. Keep `entity`, `mass` and `application` with each load.
 2. **Solve** once per route and case: `solveContinuousSpan({ supports: routeExecution.supports, loads, method })`.
@@ -142,7 +153,7 @@ The repo also registers `EMPIRICAL_RESTRAINT_NETWORK_V1/V2` (guide/line stop the
 - Confirm the 697 kg instrument `=1006649732/51250` with the owner.
 
 ## 8. Open questions for the owner
-1. Approve Option B (three-moment hand calc) as empirical? Recommended: it is the only empirical route to 90 %.
+1. ~~Approve Option B as empirical?~~ Approved 2026-11-26.
 2. Operating temperatures per line. Project Data has `DEFAULT: 21 °C` = installation, so every thermal load would be zero, yet 11 supports are "Directional Anchor … Hot Insulated Pipe".
 3. Real insulation thickness per line (it is 0 mm now).
 4. Which supports have PTFE slide plates (μ 0.1, versus 0.3 default)? Function of the 31 supports with blank SUPPORT_TYPE?
@@ -153,6 +164,8 @@ The repo also registers `EMPIRICAL_RESTRAINT_NETWORK_V1/V2` (guide/line stop the
 - **Agent tooling:**
   - Agent browser JS tools time out at about 45 s. Split the flow; the Run itself takes about 38 s.
   - On Windows, bash heredocs mangle `\b` and apostrophes. Write scripts to a file and run them.
+  - Windows PowerShell 5 `Set-Content -Encoding utf8` writes a byte-order mark; use the editor or Node to write source files.
+  - The browser JS steps run in the dev server, so a page can `await import('/src/...')` an app module (used to recompute V2 next to B in one Run).
 - **Benchmark data:**
   - `Sjson.json` must stay LF. CRLF changes its hash and makes Project Data look stale.
   - Project Data writes `kg/m³` but fields use `kg/m3`; `canonicalUnit()` in the configured-default overlay reconciles them.

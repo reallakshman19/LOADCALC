@@ -128,7 +128,67 @@ Read as each support's vertical load within ~10 % of a stiffness-based reference
 | A: lever rule, overhang moment carried by the end span | +8.3 % | +31.9 % | −19.8 % | +12.7 % | 145 N (beam 0) | +0.9 % |
 | B: three-moment hand calc (Clapeyron) + lift-off | +0.2 % | −0.8 % | +0.1 % | 0.0 % | 0 | 0.0 % |
 
-Core code for both is in `src/core/empirical-continuous-span/` (tested, not wired into the Run). B awaits the owner's explicit OK as "empirical". Guide and line stop loads: [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md), formulas in `src/core/empirical-restraint-loads/`. Full handover: [HANDOVER.md](HANDOVER.md).
+Core code for both is in `src/core/empirical-continuous-span/`. Guide and line stop loads: [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md), formulas in `src/core/empirical-restraint-loads/`. Full handover: [HANDOVER.md](HANDOVER.md).
+
+#### Option B in the Run (owner-approved as empirical, 2026-11-26)
+
+The Run now uses **`CONTINUOUS_SPAN_THREE_MOMENT_V1`** (Option B) by default: Project Data `gravityMethod = AUTO` selects it wherever V2 used to be selected. V2 stays selectable by setting `loadCalculation.gravityMethod` to `CHAINAGE_TRIBUTARY_SPAN_V2`. V3_COG is still chosen when every component has a qualified CoG, because B uses V2's midpoint application points.
+
+How it works, per route and load case:
+- **One solve.** All the route's loads (including branch loads handed over at an HREF fitting) go into one three-moment solve with lift-off; each load's share is then written to the contribution ledger. The shares add up to each load exactly.
+- **Plan length.** Spans are measured along the route's horizontal (plan) length, not along the pipe. A vertical riser therefore has zero span length: its weight acts as a point load where it meets the horizontal run, and a support on a riser acts at that point. Horizontal elbows keep their arc length (the same assumption as the beam check).
+- **Fallback.** A route with fewer than two bearing supports keeps the V2 bookkeeping (overhang force + cantilever moment demand).
+- **Labels.** Weight results are ACCURATE (owner decision). Exceptions: `SUPPORT_LIFTOFF_RELEASED` per released support; `CONTINUOUS_SPAN_UNRESOLVED_TRIBUTARY_FALLBACK` if a multi-support route cannot be resolved (not seen on 1885S).
+- **Known limits.** Uniform EI along a route (no per-span size change); the riser joint is treated as rigid (its own bending flexibility is ignored); torsion through horizontal elbows is ignored; nozzles carry nothing, so a riser at a nozzle loads the first support.
+
+Checks: `tests/support-load-three-moment.test.mjs` (B2 within 1 % of the beam; textbook two-span cases with a riser, an end riser by statics, a branch load inside the host solve; V2 still selectable). A separate hand check (unit-load / virtual-work force method, written independently of the solver) agrees with B on B2 within 0.02 %.
+
+**1885S browser Run with B (2026-11-26):** EMPTY / OPE / HYD applied 87.6 / 100.4 / 104.0 kN (unchanged), equilibrium PASSED, coverage 100 %, unallocated 0. Exceptions per case: 37 × OVERHANG_CANTILEVER_TRANSFER (single-support routes only, was 83), 2 × BRANCH_LOAD_TRANSFERRED_TO_HOST, 1 × SUPPORT_LIFTOFF_RELEASED (S8811951/B2 at 11,260 mm).
+
+Route S8811951/B2 in the Run vs the independent beam (EMPTY):
+
+| Support ch (mm) | 1,493 | 4,003 | 5,837 | 9,123 | 11,260 | 14,900 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Beam reference (N) | 3,726 | 2,457 | 8,748 | 3,407 | 0 | 7,323 |
+| B in the Run (N) | 3,733 | 2,439 | 8,753 | 3,418 | 0 | 7,316 |
+| B vs beam | +0.2 % | −0.7 % | +0.1 % | +0.3 % | 0 | −0.1 % |
+
+Every bearing support, vertical force in N. "EMPTY V2" is V2 recomputed from the same Run's loads and supports (it reproduces the earlier V2 Run on B2 exactly). The 7 supports at 0 N before (non-bearing types, the LINESTOP, PS-12297) are still 0 N and are not listed. OPE = HYD on most lines because both use the 1000 kg/m³ fallback; S8811951 uses 67 kg/m³ for OPE.
+
+| Route | Support ch (mm) | Tag | EMPTY V2 | EMPTY B | B vs V2 | OPE B | HYD B |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 10″-S8810101/B1 | 2,721 | PS-12059 | 6,805 | 6,787 | −0.3 % | 8,234 | 8,234 |
+| 10″-S8810101/B1 | 5,346 | PS-12060 | 5,552 | 5,570 | +0.3 % | 6,859 | 6,859 |
+| 10″-S8810101/B4 | 100 | =1006649732/51478 | 329 | 329 | +0.0 % | 330 | 330 |
+| 10″-S8810101/B6 | 850 | PS-12171 | 2,845 | 2,845 | +0.0 % | 3,623 | 3,623 |
+| 10″-S8810101/B7 | 642 | PS-12166 | 3,384 | 3,384 | +0.0 % | 4,109 | 4,109 |
+| 6″-S8810111/B1 | 1,628 | PS-12243 | 2,006 | 2,166 | +8.0 % | 2,705 | 2,705 |
+| 6″-S8810111/B1 | 6,207 | PS-12263 | 1,948 | 1,754 | −10.0 % | 2,154 | 2,154 |
+| 6″-S8810111/B1 | 9,234 | PS-12242 | 2,041 | 1,935 | −5.2 % | 2,503 | 2,503 |
+| 6″-S8810111/B1 | 13,884 | PS-12240 | 2,501 | 2,871 | +14.8 % | 3,680 | 3,680 |
+| 6″-S8810111/B1 | 18,640 | PS-12061 | 1,698 | 1,468 | −13.5 % | 1,883 | 1,883 |
+| 6″-S8810111/B2 | 2,891 | PS-12165 | 2,726 | 2,889 | +6.0 % | 3,641 | 3,641 |
+| 6″-S8810111/B2 | 7,505 | PS-12169 | 2,978 | 2,775 | −6.8 % | 3,593 | 3,593 |
+| 6″-S8810111/B2 | 14,091 | PS-12170 | 2,512 | 2,793 | +11.2 % | 3,556 | 3,556 |
+| 6″-S8810111/B2 | 17,098 | PS-12156 | 1,835 | 1,594 | −13.1 % | 1,964 | 1,964 |
+| 6″-S8810112/B6 | 2,530 | PS-12228 | 2,148 | 1,888 | −12.1 % | 2,465 | 2,465 |
+| 6″-S8810112/B6 | 5,691 | PS-12034 | 2,303 | 2,563 | +11.3 % | 3,043 | 3,043 |
+| 6″-S8811951/B2 | 1,493 | PS-12244 | 3,792 | 3,733 | −1.6 % | 3,756 | 4,063 |
+| 6″-S8811951/B2 | 4,003 | PS-12246 | 3,484 | 2,439 | −30.0 % | 2,453 | 2,642 |
+| 6″-S8811951/B2 | 5,837 | PS-12247 | 7,014 | 8,753 | +24.8 % | 8,772 | 9,031 |
+| 6″-S8811951/B2 | 9,123 | PS-12248 | 3,840 | 3,418 | −11.0 % | 3,447 | 3,854 |
+| 6″-S8811951/B2 | 11,260 | PS-12249 | 1,858 | 0 | lifts off | 0 | 0 |
+| 6″-S8811951/B2 | 14,900 | PS-12250 | 5,673 | 7,316 | +29.0 % | 7,324 | 7,437 |
+| 6″-S8811951/B7 | 754 | PS-12231 | 1,901 | 1,939 | +2.0 % | 1,960 | 2,249 |
+| 6″-S8811951/B7 | 4,001 | PS-12311 | 1,590 | 1,449 | −8.9 % | 1,475 | 1,849 |
+| 6″-S8811951/B7 | 6,281 | PS-12321 | 1,731 | 1,784 | +3.1 % | 1,816 | 2,262 |
+| 6″-S8811951/B7 | 10,616 | PS-12295 | 1,996 | 2,284 | +14.4 % | 2,325 | 2,898 |
+| 6″-S8811951/B7 | 13,824 | PS-12267 | 1,542 | 828 | −46.3 % | 851 | 1,159 |
+| 6″-S8811951/B7 | 16,524 | PS-12268 | 2,027 | 2,502 | +23.4 % | 2,531 | 2,941 |
+| 8″-S8810103/B1 | 2,825 | PS-12228 | 3,725 | 3,334 | −10.5 % | 4,237 | 4,237 |
+| 8″-S8810103/B1 | 5,985 | PS-12034 | 3,837 | 4,228 | +10.2 % | 5,076 | 5,076 |
+
+Only B2 has an independent reference. The other routes' B numbers are not yet checked against a stiffness reference; a CAESAR II (or similar) run for 1885S is still needed to measure the 90 % target on every support. Insulation is still the 0 mm SAMPLE ASSUMPTION.
 
 #### First benchmark results review (2026-11-26)
 
