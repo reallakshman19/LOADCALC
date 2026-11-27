@@ -706,7 +706,13 @@ function guideMarkup(guides, accepted, temperatureSource = null) {
   const conflictText = temperatureSource?.conflicts?.length
     ? ` Not used, Line List gives different temperatures: ${temperatureSource.conflicts.join(', ')}.`
     : '';
-  const temperatureNote = `<p class="guide-temperatures" data-temperature-source="${escapeHtml(temperatureSource?.source || 'PROJECT_DATA')}">Operating temperatures: ${escapeHtml(tempText)}; installation ${escapeHtml(String(guides.thermal?.installationTemperatureC ?? '—'))} °C.${escapeHtml(conflictText)}</p>`;
+  const expansion = temperatureSource?.expansion;
+  const expansionText = expansion?.status === 'READY'
+    ? `Expansion coefficient (table): ${expansion.lines.map((line) => (Number.isFinite(line.value)
+      ? `${line.lineKey} ${line.material} ${line.value.toExponential(3)} mm/mm/°C at ${line.temperatureC} °C`
+      : `${line.lineKey} ${line.material || 'no material'}: ${line.status}, Project Data material value used`)).join('; ')}.`
+    : `Expansion coefficient: Project Data material value (expansion table ${expansion?.status === 'NOT_APPROVED' ? 'not filled / not approved yet' : 'not set'}).`;
+  const temperatureNote = `<p class="guide-temperatures" data-temperature-source="${escapeHtml(temperatureSource?.source || 'PROJECT_DATA')}" data-expansion-status="${escapeHtml(expansion?.status || '')}">Operating temperatures: ${escapeHtml(tempText)}; installation ${escapeHtml(String(guides.thermal?.installationTemperatureC ?? '—'))} °C.${escapeHtml(conflictText)} ${escapeHtml(expansionText)}</p>`;
   const tagOf = (row) => row.tags?.find((tag) => tag.startsWith('PS-')) || row.tags?.[0] || row.siteId;
   const endText = (end) => {
     if (end.status === 'SHIELDED') return 'shielded by a guide nearer the elbow';

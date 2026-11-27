@@ -194,6 +194,22 @@
       "evidence": { "source": "1885S owner default — ASTM A106B carbon steel at 21°C per ASME B31.3 Appendix C", "locator": "E=203000 MPa, α=1.17×10⁻⁵/°C, ν=0.3" },
       "approved": true
     },
+    "thermalExpansionTable": {
+      "value": {
+        "schema": "thermal-expansion-table/v1",
+        "unit": "mm/mm/°C",
+        "basis": "MEAN_FROM_INSTALLATION",
+        "basisNote": "Mean coefficient between the installation temperature (21 °C) and T, so growth = coefficient x (T - 21) x length",
+        "temperaturesC": [-29, 0, 21, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400],
+        "materials": {
+          "CSS": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+          "SS316L": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+          "SA825": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+        }
+      },
+      "evidence": { "source": "PLACEHOLDER 2026-11-27: owner will supply the values", "locator": "Rows are the Line List Material codes; template project-data/thermal-expansion-table-template.csv. Not used until filled and approved; until then materialElasticProperties applies" },
+      "approved": false
+    },
     "stressCodeBasis": {
       "value": { "code": "ASME_B31_3", "edition": "2022", "sustainedStressFormula": "BASIC_WEIGHT_AND_PRESSURE" },
       "evidence": { "source": "1885S owner default — ASME B31.3 Process Piping 2022 Edition", "locator": "Governing code for 1885S process piping system" },

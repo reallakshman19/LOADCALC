@@ -333,6 +333,20 @@ The pipes the Run counts add 1,407 kg = **13.80 kN**, exactly the EMPTY increase
 - Guides: unchanged (they depend on temperature and stiffness, not weight). PS-12268 2,144–8,578 N; PS-12242 496–1,984 N; PS-12248 3–153 N.
 - Sample assumptions left: the 5 placeholder fitting weights. The 1,000 kg/m³ fluid fallback and the 0 mm insulation no longer apply to any 1885S line.
 
+#### Thermal expansion table (placeholder, 2026-11-27)
+
+- **Project Data:** `thermoMechanicalBasis.thermalExpansionTable` holds the expansion coefficient by material and temperature.
+  - Unit mm/mm/°C. Basis MEAN_FROM_INSTALLATION: growth = coefficient × (T − 21 °C) × L.
+  - Columns −29, 0, 21, 50 … 400 °C in 25 °C steps; rows are the Line List material codes: CSS, SS316L, SA825.
+  - 1885S has it as an **empty placeholder, not approved**, waiting for the owner's values.
+- **Template:** `project-data/thermal-expansion-table-template.csv`. Converter: `node benchmarks/checks/expansion-table-from-csv.mjs <filled.csv>` prints the Project Data value and rejects non-numbers and values that are not about 1e-5.
+- **`src/workspace/support-sites/thermal-expansion-table.js`:**
+  - Each line's coefficient is interpolated linearly at its operating temperature, with the material taken from the Line List.
+  - Only an approved table is used. A blank cell either side, a missing row or a temperature outside the columns gives no value, and Project Data `materialElasticProperties` applies.
+  - The guide check uses the growing run's line for α and the guided run's line for E.
+  - The Results page states which α was used.
+- Tests: `tests/thermal-expansion-table.test.mjs` (test values 1.30/1.32×10⁻⁵ at 300/325 °C give 1.3072×10⁻⁵ at 309 °C); guide bounds scale by α.
+
 **Open: α at temperature.** Project Data's α = 1.17×10⁻⁵ /°C is labelled "at 21 °C". The mean coefficient from 21 °C to 309 °C for carbon steel is higher (to be confirmed from ASME B31.3 Appendix C). Growth, and so the guide bounds, scale with it.
 
 #### First benchmark results review (2026-11-26)

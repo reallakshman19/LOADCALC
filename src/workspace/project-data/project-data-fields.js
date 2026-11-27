@@ -62,6 +62,10 @@ export const PROJECT_DATA_GROUPS = Object.freeze([
     phase2Field('casePressuresPa', 'Pressure by load case or line', 'json', 'Pa'),
     phase2Field('corrosionAllowancesMm', 'Corrosion allowance by class or line', 'json', 'mm'),
     phase2Field('materialElasticProperties', 'Elastic modulus and thermal expansion properties', 'json', 'Material policy'),
+    // { schema, unit "mm/mm/°C", basis "MEAN_FROM_INSTALLATION", temperaturesC: [..],
+    //   materials: { "<Line List material code>": [coefficient per temperature | null] } }.
+    // Used by the thermal checks once approved; otherwise materialElasticProperties.
+    field('thermalExpansionTable', 'Thermal expansion coefficient by material and temperature', 'json', 'mm/mm/°C'),
     phase2Field('stressCodeBasis', 'Stress-code basis', 'json', 'Sustained stress policy'),
     phase2Field('pressureBoundarySemantics', 'Pressure-boundary and effective-area semantics', 'json', 'Pressure load policy'),
     phase2Field('fluidPhaseAndFillState', 'Fluid phase and fill-state policy', 'json', 'Load-case content policy'),

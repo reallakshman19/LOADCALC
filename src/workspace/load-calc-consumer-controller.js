@@ -40,6 +40,8 @@ import { buildSupportFrictionLoads } from './support-sites/support-friction-load
 import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
 import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lateral-loads.js';
 import { withLineListOperatingTemperatures } from './support-sites/line-list-temperatures.js';
+import { lineExpansionCoefficients } from './support-sites/thermal-expansion-table.js';
+import { projectDataValue } from './project-data/project-data-contract.js';
 import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
@@ -838,11 +840,21 @@ function currentFrictionLoads(distribution) {
     });
     // Thermal checks use the Line List's operating temperature per line where
     // Project Data does not set that line itself (a view; Project Data unchanged).
-    const thermal = withLineListOperatingTemperatures(
+    const lineRows = masterDataController.getMasterData()?.lineList?.normalizedRows || [];
+    const modelLines = [...new Set((routePartitionModel?.routes || []).map((route) => route.lineKey).filter(Boolean))];
+    const thermal = withLineListOperatingTemperatures(profile, lineRows, modelLines);
+    // Expansion coefficient per line from the approved table (material from
+    // the Line List, at the line's operating temperature).
+    const operatingC = projectDataValue(thermal.profile, 'thermoMechanicalBasis.operatingTemperaturesC') || {};
+    const expansion = lineExpansionCoefficients({
       profile,
-      masterDataController.getMasterData()?.lineList?.normalizedRows,
-      [...new Set((routePartitionModel?.routes || []).map((route) => route.lineKey).filter(Boolean))],
-    );
+      materialByLine: Object.fromEntries(lineRows
+        .filter((row) => modelLines.includes(String(row.lineKey)) && String(row.material || '').trim())
+        .map((row) => [String(row.lineKey), String(row.material).trim()])),
+      temperatureByLine: Object.fromEntries(modelLines
+        .map((lineKey) => [lineKey, Number.isFinite(operatingC[lineKey]) ? operatingC[lineKey] : operatingC.DEFAULT])
+        .filter(([, value]) => Number.isFinite(value))),
+    });
     friction = buildSupportFrictionLoads({ restraintTable, distribution, profile: thermal.profile });
     const routeLegs = buildRouteLegs({ routePartitionModel, profile });
     const lineStops = buildSupportLineStopLoads({ restraintTable, frictionLoads: friction, routeLegs });
@@ -851,11 +863,17 @@ function currentFrictionLoads(distribution) {
       guides = buildSupportGuideLateralLoads({
         restraintTable, routeLegs, distribution, profile: thermal.profile,
         pipeSections: currentPipeSections(routePartitionModel),
+        expansionByLine: expansion.byLine,
       });
     } catch (error) {
       console.warn('Guide lateral loads not shown:', error);
     }
-    const temperatureSource = { source: thermal.source, appliedByLine: thermal.applied, conflicts: thermal.conflicts };
+    const temperatureSource = {
+      source: thermal.source,
+      appliedByLine: thermal.applied,
+      conflicts: thermal.conflicts,
+      expansion: { status: expansion.status, lines: expansion.lines },
+    };
     return Object.freeze({ ...friction, lineStops, guides, temperatureSource });
   } catch (error) {
     console.warn('Friction or line stop loads not shown:', error);

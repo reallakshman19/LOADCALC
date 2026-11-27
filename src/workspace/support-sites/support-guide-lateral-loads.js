@@ -32,7 +32,7 @@ const CAPACITY_PATH = 'restraintPolicy.guideLateralCapacityN';
  * @param {object} input.distribution vertical Run result (OPE ledger gives pipe sections)
  * @param {object} input.profile Project Data profile
  */
-export function buildSupportGuideLateralLoads({ restraintTable, routeLegs, distribution, profile, pipeSections = null } = {}) {
+export function buildSupportGuideLateralLoads({ restraintTable, routeLegs, distribution, profile, pipeSections = null, expansionByLine = null } = {}) {
   if (!Array.isArray(restraintTable?.rows)) throw new TypeError('restraintTable.rows is required.');
   if (!Array.isArray(routeLegs?.legs) || !Array.isArray(routeLegs?.axialRuns)) throw new TypeError('routeLegs with axialRuns is required.');
   const thermal = thermalBasis(profile);
@@ -68,7 +68,9 @@ export function buildSupportGuideLateralLoads({ restraintTable, routeLegs, distr
   sitesByRun.forEach((sites) => sites.sort((a, b) => a.pipe.chainageMm - b.pipe.chainageMm));
   const isGuide = (site) => site.status === 'READY' && site.restrains?.lateral === 'BOTH';
   const isStop = (site) => site.status === 'READY' && site.restrains?.axial === 'BOTH';
-  const context = { legsByRoute, legById, runByLeg, sitesByRun, isStop, thermal, sections };
+  // expansionByLine: { lineKey: alpha } from the approved thermal expansion
+  // table at each line's operating temperature; otherwise materialElasticProperties.
+  const context = { legsByRoute, legById, runByLeg, sitesByRun, isStop, thermal, sections, expansionByLine };
 
   const rows = restraintTable.rows.filter(isGuide).map((guide) => {
     const run = runOfSite(guide);
@@ -153,10 +155,16 @@ function endLoad(end, guide, run, context) {
 
   const t = context.thermal;
   if (t.status !== 'READY') return { ...detail, status: 'BLOCKED_THERMAL_DATA', note: t.reason, lowerN: null, upperN: null, growthLengthMm, growthBasis };
+  // Growth uses the growing run's line (temperature and alpha); bending uses
+  // the guided run's E.
   const deltaT = t.deltaTFor(nextRun.lineKey);
   const material = t.materialFor(run.lineKey);
-  if (!Number.isFinite(deltaT) || !material) return { ...detail, status: 'BLOCKED_THERMAL_DATA', note: 'No operating temperature or material for this line.', lowerN: null, upperN: null, growthLengthMm, growthBasis };
-  const growthMm = material.thermalExpansionPerC * deltaT * growthLengthMm;
+  const growing = t.materialFor(nextRun.lineKey);
+  if (!Number.isFinite(deltaT) || !material || !growing) return { ...detail, status: 'BLOCKED_THERMAL_DATA', note: 'No operating temperature or material for this line.', lowerN: null, upperN: null, growthLengthMm, growthBasis };
+  const tableAlpha = context.expansionByLine?.[nextRun.lineKey];
+  const alpha = Number.isFinite(tableAlpha) ? tableAlpha : growing.thermalExpansionPerC;
+  const alphaSource = Number.isFinite(tableAlpha) ? 'THERMAL_EXPANSION_TABLE' : 'MATERIAL_ELASTIC_PROPERTIES';
+  const growthMm = alpha * deltaT * growthLengthMm;
   const deflectionMm = growthMm * across;
   if (deflectionMm === 0) {
     return { ...detail, status: 'CALCULATED', deltaTC: deltaT, growthLengthMm, growthBasis, deflectionMm, note: 'No growth: operating temperature equals installation.', lowerN: 0, upperN: 0 };
@@ -171,7 +179,8 @@ function endLoad(end, guide, run, context) {
     growthBasis,
     deflectionMm,
     elasticModulusMpa: material.elasticModulusMpa,
-    thermalExpansionPerC: material.thermalExpansionPerC,
+    thermalExpansionPerC: alpha,
+    thermalExpansionSource: alphaSource,
     secondMomentMm4: { min: section.minI, max: section.maxI },
     pipeSizes: [...section.sizes],
     lowerN: 0,

@@ -162,6 +162,18 @@ test('no pipe section in the Run blocks the guide instead of guessing', () => {
   });
   close(fromInput.rows[0].upperN, 5949.5);
 
+  // A table coefficient for the growing line replaces Project Data's alpha:
+  // 1.30e-5 instead of 1.17e-5 scales the bounds by 1.30 / 1.17.
+  const fromTable = buildSupportGuideLateralLoads({
+    restraintTable: { rows: [site('G1', 'R+G', 'P1', 2000, alongX)] },
+    routeLegs: buildRouteLegs({ routePartitionModel: lBend(), profile: prof }),
+    distribution,
+    profile: prof,
+    expansionByLine: { L1: 1.30e-5 },
+  });
+  close(fromTable.rows[0].upperN, 5949.5 * 1.30 / 1.17, 1);
+  assert.equal(fromTable.rows[0].ends.find((row) => row.end === 'END').thermalExpansionSource, 'THERMAL_EXPANSION_TABLE');
+
   // No growth needs no section: 0, not blocked.
   const cold = buildSupportGuideLateralLoads({
     restraintTable: { rows: [site('G1', 'R+G', 'P1', 2000, alongX)] },
