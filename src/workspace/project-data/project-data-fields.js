@@ -72,6 +72,9 @@ export const PROJECT_DATA_GROUPS = Object.freeze([
     phase2Field('restraintPreloadsN', 'Restraint preloads', 'json', 'N', 'SIGNED'),
     phase2Field('frictionCoefficients', 'Friction coefficients', 'json', 'ratio'),
     phase2Field('contactPolicy', 'Contact and unilateral behavior policy', 'json', 'Nonlinear restraint policy'),
+    // { "DEFAULT": N, "<support tag>": N }: lateral load a guide is designed
+    // for. Used only to flag "guide too close to the elbow". Unset: no flag.
+    field('guideLateralCapacityN', 'Guide lateral design capacity', 'json', 'N'),
   ]),
   group('qualificationPolicy', 'Qualification and configured defaults', [
     phase2Field('configuredDefaults', 'Configured default policy', 'json', 'Explicit field-specific defaults', 'SIGNED'),

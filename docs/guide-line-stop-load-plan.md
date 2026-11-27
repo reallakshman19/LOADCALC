@@ -81,6 +81,6 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 | 2 | Leg decomposition and free growth (reuse thermal-free-movement). **Legs done 2026-11-27** (`route-legs.js`; axial runs join legs through offsets of at most `topology.legOffsetMaxAngleDeg`, 30° for 1885S by owner decision); free growth waits for temperatures | 1, temperatures | data |
 | 3 | Friction loads, movement-based and design. **Design friction done 2026-11-27** (`support-friction-loads.js`, Results page); movement-based waits for free growth and neutral points | 0, 2 | ACCURATE |
 | 4 | Line stop axial: friction part, then the flexibility upper bound. **Friction part done 2026-11-27** (`support-line-stop-loads.js`, Results page; design = larger side, net also shown) | 3 | ACCURATE + SCREENING |
-| 5 | Guide lateral: guided-cantilever bounds and the too-close-to-elbow flag | 2 | SCREENING |
+| 5 | Guide lateral: guided-cantilever bounds and the too-close-to-elbow flag. **Done 2026-11-27** (`support-guide-lateral-loads.js`, Results page); 0 until temperatures; the flag needs `restraintPolicy.guideLateralCapacityN` | 2 | SCREENING |
 | 6 | Optional occasional g-factor loads | 0, 1 | ACCURATE |
 | 7 | Hand-calc test suite, cross-check, 1885S results table in ROADMAP | each step | — |

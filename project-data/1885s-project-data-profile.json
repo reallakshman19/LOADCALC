@@ -47,7 +47,7 @@
     "routeJoiningRules": { "value": { "partition": "branch-scoped-connected-components", "chainage": "exact-port-topology", "sourceOrderAllowed": false, "degreeAboveTwo": "BLOCKED" }, "evidence": { "source": "1885S implementation plan", "locator": "Route-partitioned chainage from exact port topology" }, "approved": true },
     "supportTypeCapabilities": { "value": { "REST": { "vertical": true }, "GUIDE": { "vertical": false }, "LINESTOP": { "vertical": false } }, "evidence": { "source": "Topo Validator restraint family mapping and 1885S vertical-gravity scope", "sourceKey": "topoValidatorVisualModel", "sourceHash": "d48ffe688c5dc785e1b7ece6caf236c58180c7fbdb4437838b6d2e80f9bb390b", "locator": "topology-3d-visual-model.js REST/GUIDE/LINE_STOP families" }, "approved": true },
     "supportTypeOverridesByTag": { "value": { "PS-12297": "REST", "=1006649732/51465": "NONE", "=1006649732/51422": "NONE", "=1006649732/51254": "NONE", "=1006657924/39580": "NONE", "=1006649732/51378": "NONE" }, "evidence": { "source": "1885S owner decision 2026-11-26 for the 6 supports with no SUPPORT_TYPE on any part", "locator": "PS-12297: frame PIPE SUPPORT TYPE-108 (FT17-7.6) only, treated as REST like the other TYPE-108 rests; bare ATTA-20/ATTA-150 points and PENE-150 floor openings: not supports" }, "approved": true },
-    "legOffsetMaxAngleDeg": { "value": 30, "evidence": { "source": "1885S owner decision 2026-11-27: a sloped offset of 30 degrees or less between two legs running the same way is counted as straight pipe for line stop loads", "locator": "S8811951/B2: two 16 degree, 146 mm offsets (40 mm step) past PS-12248; the step moves about 0.0002 mm under the friction it carries" }, "approved": true },
+    "legOffsetMaxAngleDeg": { "value": 30, "evidence": { "source": "1885S owner decision 2026-11-27: a sloped offset of 30 degrees or less between two legs running the same way is counted as straight pipe for line stop loads", "locator": "S8811951/B2 past PS-12248: two 6 x 3 inch eccentric reducers (146 mm long, 40 mm centreline step, chord about 16 degrees) around a 3 inch instrument run; axial load passes straight through them" }, "approved": true },
     "pipingClassMappings": {
       "value": { "91261M7": { "masterClass": "91261", "requiredChecks": ["NPS", "rating", "material"], "validation": { "npsIn": 6, "ratingClass": 900, "lineListMaterialCode": "CSS", "masterMaterialCategory": "Carbon steel", "approved": true } } },
       "evidence": { "source": "1885S implementation plan", "locator": "Approved 91261M7 to 91261 mapping" },
@@ -234,6 +234,11 @@
     "contactPolicy": {
       "value": { "unilateralContactEnabled": true, "liftoffAllowed": true, "algorithm": "ITERATIVE_PENALTY", "maxIterations": 50, "convergenceTolerance": 1e-4 },
       "evidence": { "source": "1885S owner default — iterative penalty contact, liftoff enabled, 50 iterations", "locator": "Standard nonlinear contact solver for vertical resting supports" },
+      "approved": true
+    },
+    "guideLateralCapacityN": {
+      "value": {},
+      "evidence": { "source": "1885S: guide lateral design capacities not given yet", "locator": "Empty: no 'guide too close to the elbow' flag until the owner gives capacities (DEFAULT or per tag)" },
       "approved": true
     }
   },

@@ -98,7 +98,10 @@ function axialRunsOf(legs, maxAngleDeg) {
     runs.push({
       runId: `${first.legId}:run`,
       routeId: first.routeId,
+      lineKey: first.lineKey,
       legIds: members.map((leg) => leg.legId),
+      firstLegIndex: first.index,
+      lastLegIndex: last.index,
       startMm: first.startMm,
       endMm: last.endMm,
       lengthMm: last.endMm - first.startMm,
@@ -138,6 +141,7 @@ function routeLegs(route, edgeById, toleranceMm) {
       current.endMm = row.endMm;
       current.endPointMm = to;
       current.entityIds.push(edge.entityId);
+      current.pieces.push({ entityId: edge.entityId, startMm: row.startMm, endMm: row.endMm });
       continue;
     }
     current = {
@@ -152,6 +156,8 @@ function routeLegs(route, edgeById, toleranceMm) {
       endPointMm: to,
       axis: unit(sub(to, from)),
       entityIds: [edge.entityId],
+      // Each piece's route chainage, for anything that needs a stretch of the leg.
+      pieces: [{ entityId: edge.entityId, startMm: row.startMm, endMm: row.endMm }],
     };
     legs.push(current);
   }

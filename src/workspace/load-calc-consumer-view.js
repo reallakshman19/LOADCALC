@@ -665,6 +665,7 @@ function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
     <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th>${frictionHead}<th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
     <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td>${frictionCells(row.supportSiteId)}<td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
     ${friction ? lineStopMarkup(frictionLoads.lineStops, acceptedCurrent) : ''}
+    ${friction ? guideMarkup(frictionLoads.guides, acceptedCurrent) : ''}
     <details ${loadCase.status === 'CALCULATED_WITH_EXCEPTIONS' ? 'open' : ''}><summary>Exceptions (${integer(loadCase.exceptionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.exceptionLedger || [], null, 2))}</pre></details>
     <details><summary>Contribution ledger (${integer(loadCase.contributionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.contributionLedger || [], null, 2))}</pre></details>
     <details><summary>Excluded inputs (${integer(loadCase.excludedInputs?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.excludedInputs || [], null, 2))}</pre></details>
@@ -691,6 +692,34 @@ function lineStopMarkup(lineStops, accepted) {
   return `<h3>Line stops: axial load, friction part (ACCURATE)</h3>
     <p class="line-stop-basis">${escapeHtml(lineStops.basis)}</p>
     <table class="line-stop-loads"><thead><tr><th>Line stop</th><th>Type</th><th>Leg length</th><th>Friction, start side (N)</th><th>Friction, end side (N)</th><th>Design axial (N)</th><th>Net if both sides slide (N)</th><th>Push from other legs</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+}
+
+// Guide lateral loads from thermal growth, guided cantilever (plan step 7).
+function guideMarkup(guides, accepted) {
+  if (!guides?.rows?.length) return '';
+  const tagOf = (row) => row.tags?.find((tag) => tag.startsWith('PS-')) || row.tags?.[0] || row.siteId;
+  const endText = (end) => {
+    if (end.status === 'SHIELDED') return 'shielded by a guide nearer the elbow';
+    if (end.status === 'ROUTE_END') return 'no elbow (line end, tee or nozzle)';
+    if (end.status === 'NO_LATERAL_COMPONENT') return end.nextOrientation === 'VERTICAL' ? 'riser past elbow: no sideways push' : 'no sideways push';
+    if (end.status !== 'CALCULATED') return end.status;
+    const grow = end.growthBasis?.kind === 'FROM_AXIAL_STOP' ? 'from its line stop' : 'whole run, no stop';
+    return `L ${Math.round(end.guideToCornerMm)} mm to elbow; next run grows ${Math.round(end.growthLengthMm)} mm (${grow}), ΔT ${end.deltaTC} °C, Δ ${end.deflectionMm.toFixed(2)} mm`;
+  };
+  const flagText = (row) => {
+    if (!row.flag) return 'capacity not set';
+    if (row.flag.code === 'WITHIN_CAPACITY') return `within ${row.flag.capacityN} N`;
+    return `TOO CLOSE TO ELBOW (capacity ${row.flag.capacityN} N; move to ≥ ${row.flag.minimumDistanceMm} mm from the elbow corner)`;
+  };
+  const body = guides.rows.map((row) => `<tr data-guide-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${row.lowerN === null ? escapeHtml(row.status) : force(row.lowerN, accepted)}</td><td>${row.upperN === null ? '—' : force(row.upperN, accepted)}</td><td><small>${row.ends.map((end) => `${end.end === 'START' ? 'start' : 'end'} side: ${escapeHtml(endText(end))}`).join('<br>')}</small></td><td>${escapeHtml(flagText(row))}</td></tr>`).join('');
+  const t = guides.thermal || {};
+  const note = t.noMovement
+    ? `Every operating temperature equals installation (${t.installationTemperatureC} °C): no thermal growth, so these are 0 until real line temperatures are entered.`
+    : '';
+  return `<h3>Guides: lateral load from thermal growth (SCREENING bounds)</h3>
+    <p class="guide-basis">${escapeHtml(guides.basis)} ${escapeHtml(note)}</p>
+    <table class="guide-lateral-loads"><thead><tr><th>Guide</th><th>Type</th><th>Lower bound (N)</th><th>Upper bound (N)</th><th>Basis</th><th>Too close to elbow?</th></tr></thead>
     <tbody>${body}</tbody></table>`;
 }
 

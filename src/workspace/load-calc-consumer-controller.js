@@ -38,6 +38,7 @@ import { SUPPORT_RESTRAINT_EVENTS } from './support-restraint-events.js';
 import { buildSupportRestraintTable } from './support-sites/support-restraint-table.js';
 import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
 import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
+import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lateral-loads.js';
 import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
@@ -820,8 +821,8 @@ export class LoadCalcConsumerController {
   }
 }
 
-// Design friction (guide / line stop plan, step 3) and line stop axial
-// friction (step 4) for the Results page. An extra view on the vertical Run:
+// Design friction (guide / line stop plan, step 3), line stop axial
+// friction (step 4) and guide lateral bounds (step 7) for the Results page. An extra view on the vertical Run:
 // a failure here hides those columns and never blocks the Results page.
 function currentFrictionLoads(distribution) {
   if (!distribution?.loadCases?.length) return null;
@@ -835,16 +836,42 @@ function currentFrictionLoads(distribution) {
       profile,
     });
     friction = buildSupportFrictionLoads({ restraintTable, distribution, profile });
-    const lineStops = buildSupportLineStopLoads({
-      restraintTable,
-      frictionLoads: friction,
-      routeLegs: buildRouteLegs({ routePartitionModel, profile }),
-    });
-    return Object.freeze({ ...friction, lineStops });
+    const routeLegs = buildRouteLegs({ routePartitionModel, profile });
+    const lineStops = buildSupportLineStopLoads({ restraintTable, frictionLoads: friction, routeLegs });
+    let guides = null;
+    try {
+      guides = buildSupportGuideLateralLoads({
+        restraintTable, routeLegs, distribution, profile,
+        pipeSections: currentPipeSections(routePartitionModel),
+      });
+    } catch (error) {
+      console.warn('Guide lateral loads not shown:', error);
+    }
+    return Object.freeze({ ...friction, lineStops, guides });
   } catch (error) {
     console.warn('Friction or line stop loads not shown:', error);
     return friction;
   }
+}
+
+// Pipe OD and wall per pipe entity, as the sealed common input carries them
+// (master data), for the guide bending check. Read-only.
+function currentPipeSections(routePartitionModel) {
+  const snapshot = nonFeaCommonInputStore.getSnapshot();
+  const components = snapshot?.commonInput?.enrichedModel?.components
+    || snapshot?.request?.enrichedProjection?.enrichedModel?.components
+    || [];
+  const entityBySource = new Map((routePartitionModel?.edges || [])
+    .filter((edge) => edge.source?.sourceEntityId)
+    .map((edge) => [String(edge.source.sourceEntityId), edge.entityId]));
+  return components
+    .filter((component) => component.type === 'PIPE')
+    .map((component) => ({
+      entityId: entityBySource.get(String(component.sourceEntityId)),
+      outsideDiameterMm: component.engineeringProperties?.outerDiameterMm?.value,
+      wallThicknessMm: component.engineeringProperties?.wallThicknessMm?.value,
+    }))
+    .filter((row) => row.entityId);
 }
 
 /**

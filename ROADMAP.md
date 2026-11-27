@@ -227,7 +227,7 @@ Movement-based friction (zero where the pipe does not move) is reported as 0 whi
 
 | Line stop | Type | Leg (mm) | Start side (N) | End side (N) | Design axial (N) |
 | --- | --- | ---: | ---: | ---: | ---: |
-| PS-12248 | R+G+LS | 15,732 (through two 15.8° steps) | 4,494 (3 rests) | 2,197 (PS-12250; PS-12249 lifted off) | 4,494 |
+| PS-12248 | R+G+LS | 15,732 (through two eccentric reducers) | 4,494 (3 rests) | 2,197 (PS-12250; PS-12249 lifted off) | 4,494 |
 | PS-12060 | R+G+LS | 5,497 | 2,470 | 0 | 2,470 |
 | PS-12240 | R+LS | 13,792 | 1,397 (incl. guide PS-12242) | 565 | 1,397 |
 | PS-12034 (8″ S8810103) | R+LS | 5,573 | 1,271 | 0 | 1,271 |
@@ -243,9 +243,35 @@ Hand checks: PS-12248 (8,772 + 2,453 + 3,756) × 0.3 = 4,494 N; PS-12240 (2,503 
 
 **Shallow offsets (owner decision 2026-11-27):** a sloped offset of at most `topology.legOffsetMaxAngleDeg` = 30° between two legs running the same way counts as straight pipe for line stop loads.
 - `route-legs.js` gives these as `axialRuns`. An elbow counts at its turn angle (twice its chord), so a pair of 45° elbows is a 45° step and is not joined. An unset or unapproved angle joins nothing.
-- 1885S: only S8811951/B2 joins, through its two 15.8°, 146 mm steps (a 40 mm drop). The step moves about 0.0002 mm under the 2,197 N it carries.
+- 1885S: only S8811951/B2 joins. The two "steps" are **6″ × 3″ eccentric reducers** (146 mm long; centreline step (168.3 − 88.9)/2 = 40 mm, chord 15.8°) around a 3″ instrument run at 10,350–15,760 mm. (Corrected 2026-11-27: first described as sloped pipe.) Axial load passes straight through a reducer.
 - Result: PS-12248's design load is unchanged at 4,494 N; its net value goes from 4,494 N to 2,297 N.
-- Why it matters for thermal: stopping at the step would miss 84 % of the growth toward the far elbow (1,081 mm instead of 6,933 mm of pipe).
+- Why it matters for thermal: stopping at the reducer would miss 84 % of the growth toward the far elbow (1,081 mm instead of 6,933 mm of pipe).
+- Possible follow-up: treat any reducer as in-line whatever its eccentricity, independent of the angle setting.
+
+#### Guide lateral loads (guide / line stop plan, step 7, 2026-11-27)
+
+`src/workspace/support-sites/support-guide-lateral-loads.js`, label **SCREENING** (two bounds). Guided cantilever (Kellogg):
+- At each end of a guide's straight run that turns at an elbow, the run past the elbow grows towards it: δ = α·ΔT·Lg. Lg runs from that run's nearest line stop to the elbow, or is the whole run when it has no stop (an upper value).
+- Only the part of δ across the guided run counts (horizontal, perpendicular), Δ = δ·|cos|. A riser past the elbow grows vertically and loads the rests, not the guide.
+- The FIRST guide from the elbow takes it, over L = guide to elbow corner (tangent point + R·tan(θ/2), taken from the elbow chord). Guides further away are shown as shielded.
+- **Lower = 3·E·I·Δ/L³** (elbow free to rotate), **upper = 12·E·I·Δ/L³** (held).
+- E and α come from `thermoMechanicalBasis.materialElasticProperties` (1885S: 203,000 MPa, 1.17×10⁻⁵ /°C); ΔT per line from `operatingTemperaturesC` (line key, else DEFAULT) minus installation.
+- I comes from the pipe between the guide and the elbow: OD and wall from the sealed input (master data), else from the Run's ledger. With a reducer in that stretch, the lower bound uses the smaller I and the upper the larger.
+- "Guide too close to the elbow": upper bound above `restraintPolicy.guideLateralCapacityN` (DEFAULT or per tag), with the minimum distance (12·E·I·Δ/F)^⅓ from the elbow corner. 1885S has no capacities yet, so no flag.
+- Shown on the Results page under the line stop table. Test: `tests/support-guide-lateral-loads.test.mjs` (hand check: 6″ Sch 40 L-bend, 6,000 mm run past the elbow, ΔT 100 °C, L 3,229 mm: 1,487 / 5,950 N).
+
+1885S (browser Run 2026-11-27): 6 guides, all **0 N**, because every line is at 21 °C. PS-12034, PS-12169 and PS-12060 have only risers past their elbows, so they would stay 0 when hot.
+
+What-if, ΔT = 100 °C on every line (computed in the page, not saved):
+
+| Guide | L to elbow (mm) | Run past elbow grows (mm) | Δ (mm) | Lower–upper (N) |
+| --- | ---: | ---: | ---: | ---: |
+| PS-12268 | 3,550 | 2,263 (from line stop PS-12295) | 2.65 | 745 – 2,978 |
+| PS-12242 | 3,800 | 642 (whole run) | 0.75 | 172 – 689 |
+| PS-12248 | 6,933 | 424 (45° piece, 0.71 across) | 0.35 | 1 – 53 (3″ and 6″ in the stretch) |
+| PS-12034, PS-12169, PS-12060 | — | riser | 0 | 0 |
+
+Hand check PS-12268: 6″ wall 14.27 mm, I = 2.066×10⁷ mm⁴, 3 × 203,000 × 2.066×10⁷ × 2.65 / 3,550³ = 745 N.
 
 #### First benchmark results review (2026-11-26)
 
