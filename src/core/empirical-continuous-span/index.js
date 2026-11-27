@@ -14,7 +14,8 @@
 // The solve is linear for a fixed set of active supports, so per-load
 // contributions (for the audit ledger) are exact and sum to the total.
 //
-// Status: core only, not wired into the Run yet. See HANDOVER.md, step 0.
+// Used by the Run as CONTINUOUS_SPAN_THREE_MOMENT_V1
+// (src/workspace/engineering-loads/support-load-distribution-v3.js).
 
 export const CONTINUOUS_SPAN_SCHEMA = 'empirical-continuous-span/v1';
 export const LEVER_OVERHANG_MOMENT_V1 = 'LEVER_OVERHANG_MOMENT_V1';
@@ -104,6 +105,10 @@ function result({ method, stations, active, loads, status, iterations, converged
     reactionsBySiteId: total ? bySite(total.reactions) : {},
     releasedSiteIds: stations.filter((_, index) => !active[index]).flatMap((station) => station.siteIds),
     coincidentGroups: stations.filter((station) => station.siteIds.length > 1).map((station) => [...station.siteIds]),
+    // Chainage each site's reaction acts at (a coincident group shares one station).
+    stationChainageBySiteId: Object.fromEntries(stations.flatMap((station) => (
+      station.siteIds.map((siteId) => [siteId, station.chainageMm])
+    ))),
     supportMomentsNmm: total ? activeStations.map((station, k) => ({ chainageMm: station.chainageMm, momentNmm: total.moments[k] })) : [],
     unresolvedMomentNmm: total ? total.unresolvedMomentNmm : 0,
     contributions: perLoad.map((solved, index) => ({ loadIndex: index, reactionsBySiteId: bySite(solved.reactions) })),

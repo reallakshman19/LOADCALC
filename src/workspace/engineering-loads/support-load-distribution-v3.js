@@ -13,11 +13,22 @@ import {
   allocateSupportUniformLoad,
   evaluateSupportLoadAccounting,
 } from './support-load-static-accounting.js';
+import { THREE_MOMENT_LIFTOFF_V1, solveContinuousSpan } from '../../core/empirical-continuous-span/index.js';
 
 export const SUPPORT_LOAD_DISTRIBUTION_SCHEMA = 'support-load-distribution/v3';
 export const SUPPORT_LOAD_DISTRIBUTION_COG_SCHEMA = 'support-load-distribution/v4';
 export const EMPIRICAL_LOAD_METHOD = 'CHAINAGE_TRIBUTARY_SPAN_V2';
 export const EMPIRICAL_LOAD_COG_METHOD = 'CHAINAGE_TRIBUTARY_SPAN_V3_COG';
+// Option B (owner-approved as empirical, 2026-11-26): three-moment hand calc
+// with one-way (lift-off) supports, per route, along the route's horizontal
+// (plan) length. Same inputs as V2; only the span statics differ.
+export const EMPIRICAL_LOAD_THREE_MOMENT_METHOD = 'CONTINUOUS_SPAN_THREE_MOMENT_V1';
+export const EMPIRICAL_SUPPORT_LOAD_METHODS = Object.freeze([
+  EMPIRICAL_LOAD_METHOD,
+  EMPIRICAL_LOAD_COG_METHOD,
+  EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
+]);
+const THREE_MOMENT_SPAN_MODEL = 'THREE_MOMENT_LIFTOFF_PLAN_LENGTH';
 
 const FLUID_COMPOSITION_RULE = 'BULK_DENSITY=AUTHORIZED_RAW_DENSITY*GOVERNED_FILL_FRACTION';
 const COMPONENT_MASS_COMPOSITION_RULE = 'ONE_DRY_MASS_POLICY_PER_PHYSICAL_COMPONENT';
@@ -125,6 +136,59 @@ export function calculateSupportLoadDistributionFromQualifiedCaseMasses(
   });
 }
 
+/**
+ * Three-moment (Option B) counterpart of calculateSupportLoadDistribution.
+ * Mass, application points and Project Data are exactly V2's.
+ */
+export function calculateSupportLoadDistributionThreeMoment(input) {
+  return calculateDistribution(input, {
+    schema: SUPPORT_LOAD_DISTRIBUTION_SCHEMA,
+    method: EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
+    componentLoadAuthorityAudit: null,
+    spanModel: THREE_MOMENT_SPAN_MODEL,
+  });
+}
+
+/** Three-moment counterpart of the non-authorizing qualified-case-mass seam. */
+export function calculateSupportLoadDistributionThreeMomentFromQualifiedCaseMasses(
+  input,
+  qualifiedCaseMasses,
+) {
+  return calculateDistribution(input, {
+    schema: SUPPORT_LOAD_DISTRIBUTION_SCHEMA,
+    method: EMPIRICAL_LOAD_THREE_MOMENT_METHOD,
+    componentLoadAuthorityAudit: null,
+    profileWorkflow: 'loadCalcProjectBasis',
+    qualifiedCaseMassByKey: normalizeQualifiedCaseMasses(qualifiedCaseMasses),
+    spanModel: THREE_MOMENT_SPAN_MODEL,
+  });
+}
+
+/** One dispatch point for every caller that holds a selected method ID. */
+export function calculateSupportLoadDistributionForMethod(method, input) {
+  if (method === EMPIRICAL_LOAD_METHOD) return calculateSupportLoadDistribution(input);
+  if (method === EMPIRICAL_LOAD_COG_METHOD) return calculateSupportLoadDistributionWithComponentCog(input);
+  if (method === EMPIRICAL_LOAD_THREE_MOMENT_METHOD) return calculateSupportLoadDistributionThreeMoment(input);
+  throw new RangeError(`Unsupported support-load method: ${method}.`);
+}
+
+export function calculateSupportLoadDistributionFromQualifiedCaseMassesForMethod(
+  method,
+  input,
+  qualifiedCaseMasses,
+) {
+  if (method === EMPIRICAL_LOAD_METHOD) {
+    return calculateSupportLoadDistributionFromQualifiedCaseMasses(input, qualifiedCaseMasses);
+  }
+  if (method === EMPIRICAL_LOAD_COG_METHOD) {
+    return calculateSupportLoadDistributionWithComponentCogFromQualifiedCaseMasses(input, qualifiedCaseMasses);
+  }
+  if (method === EMPIRICAL_LOAD_THREE_MOMENT_METHOD) {
+    return calculateSupportLoadDistributionThreeMomentFromQualifiedCaseMasses(input, qualifiedCaseMasses);
+  }
+  throw new RangeError(`Unsupported support-load method: ${method}.`);
+}
+
 /** CoG-aware counterpart of the non-authorizing qualified-case-mass seam. */
 export function calculateSupportLoadDistributionWithComponentCogFromQualifiedCaseMasses(
   input,
@@ -176,6 +240,7 @@ function calculateDistribution(input, configuration) {
   const base = {
     schema: configuration.schema,
     method: configuration.method,
+    ...(configuration.spanModel ? { spanModel: configuration.spanModel } : {}),
     datasetId: input.dataset.datasetId,
     datasetVersion: input.dataset.version || null,
     hashes: {
@@ -244,11 +309,60 @@ function buildExecutionIndex(input, globalBlockers, hasActiveCases, configuratio
         });
       }
     }
-    routeById.set(route.routeId, { chainageByEntityId, supports, branchTransfer: null });
+    routeById.set(route.routeId, { chainageByEntityId, supports, branchTransfer: null, toPlanMm: null });
   });
   attachBranchTransfers(input.routePartitionModel.routes, routeById, entityById, edgeById);
+  if (configuration.spanModel) {
+    input.routePartitionModel.routes.forEach((route) => {
+      const entry = routeById.get(route.routeId);
+      if (!Array.isArray(entry.supports)) return;
+      entry.toPlanMm = routePlanLengthMap(route, edgeById);
+      entry.supports = entry.supports.map((support) => ({ ...support, planMm: entry.toPlanMm(support.chainageMm) }));
+    });
+  }
 
   return { entityById, edgeById, routeById, baseMassByEntityId };
+}
+
+/**
+ * Maps route chainage (length along the pipe) to plan length: the running
+ * horizontal distance along the route. Vertical bending spans are horizontal,
+ * so a vertical riser has zero span length: its weight acts as a point load
+ * where it meets the horizontal run, and a support on it acts at that point.
+ * Each straight edge (or elbow) scales by the horizontal share of its chord, so
+ * horizontal pipe and horizontal elbows keep their chainage length.
+ */
+function routePlanLengthMap(route, edgeById) {
+  const segments = route.entityChainages.flatMap((row) => {
+    const edge = edgeById.get(row.entityId);
+    if (!edge || edge.pointComponent || edge.topologyCarrier || !(edge.lengthMm > 0)) return [];
+    if (!Number.isFinite(row.startMm) || !Number.isFinite(row.endMm) || !(row.endMm > row.startMm)) return [];
+    const start = edge.startMm;
+    const end = edge.endMm;
+    const chord = start && end ? Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z) : 0;
+    const ratio = chord > 0 ? Math.hypot(end.x - start.x, end.y - start.y) / chord : 1;
+    return [{ startMm: row.startMm, endMm: row.endMm, ratio }];
+  }).sort((left, right) => left.startMm - right.startMm);
+  let planMm = 0;
+  let lastMm = segments.length ? segments[0].startMm : 0;
+  const rows = segments.map((segment) => {
+    planMm += Math.max(0, segment.startMm - lastMm);
+    const row = { ...segment, planStartMm: planMm };
+    planMm += (segment.endMm - segment.startMm) * segment.ratio;
+    lastMm = Math.max(lastMm, segment.endMm);
+    return row;
+  });
+  return (chainageMm) => {
+    let previous = null;
+    for (const row of rows) {
+      if (chainageMm < row.startMm) break;
+      if (chainageMm <= row.endMm) return row.planStartMm + (chainageMm - row.startMm) * row.ratio;
+      previous = row;
+    }
+    if (!previous) return rows.length ? rows[0].planStartMm - (rows[0].startMm - chainageMm) : chainageMm;
+    // In a gap or past the last edge: count it as horizontal length.
+    return previous.planStartMm + (previous.endMm - previous.startMm) * previous.ratio + (chainageMm - previous.endMm);
+  };
 }
 
 /**
@@ -318,11 +432,31 @@ function calculateCase(caseId, input, globalBlockers, execution) {
   if (globalBlockers.length === 0) {
     const routes = input.routePartitionModel.routes;
     const isTransfer = (route) => Boolean(execution.routeById.get(route.routeId)?.branchTransfer);
-    routes.filter((route) => !isTransfer(route)).forEach((route) => calculateRoute(route, input, state, execution));
-    routes.filter(isTransfer).forEach((route) => {
-      calculateRoute(route, input, state, execution);
-      applyBranchTransfer(route, input, state, execution);
-    });
+    if (execution.spanModel) {
+      // Branch routes first, so each host route is solved once with its
+      // branch loads included (a continuous span is not superposable after
+      // lift-off has been decided).
+      const pendingByHost = new Map();
+      const late = [];
+      routes.filter(isTransfer).forEach((route) => {
+        calculateRoute(route, input, state, execution);
+        const pending = releaseBranchTransfer(route, input, state, execution);
+        if (!pending) return;
+        const hostIsBranch = isTransfer(pending.host);
+        if (hostIsBranch) { late.push(pending); return; }
+        pendingByHost.set(pending.host.routeId, [...(pendingByHost.get(pending.host.routeId) || []), pending]);
+      });
+      routes.filter((route) => !isTransfer(route)).forEach((route) => (
+        calculateRoute(route, input, state, execution, pendingByHost.get(route.routeId) || [])
+      ));
+      late.forEach((pending) => recordBranchTransferTributary(pending, state, execution));
+    } else {
+      routes.filter((route) => !isTransfer(route)).forEach((route) => calculateRoute(route, input, state, execution));
+      routes.filter(isTransfer).forEach((route) => {
+        calculateRoute(route, input, state, execution);
+        applyBranchTransfer(route, input, state, execution);
+      });
+    }
   }
   const equilibrium = globalBlockers.length
     ? blockedEquilibrium()
@@ -345,7 +479,7 @@ function calculateCase(caseId, input, globalBlockers, execution) {
   });
 }
 
-function calculateRoute(route, input, state, execution) {
+function calculateRoute(route, input, state, execution, branchLoads = []) {
   supportLoadPerformanceMetrics.routeCaseEvaluations += 1;
   if (route.status !== 'READY') {
     state.blockers.push(...route.blockers.map((row) => ({ ...row, routeId: route.routeId })));
@@ -356,6 +490,8 @@ function calculateRoute(route, input, state, execution) {
   const supports = routeExecution.supports;
   if (!Array.isArray(supports)) throw new Error(`Missing qualified support projection for READY route ${route.routeId}.`);
 
+  // Pass 1: every qualified load on the route (exclusions recorded as before).
+  const items = [];
   route.physicalEdgeIds.forEach((entityId) => {
     const entity = execution.entityById.get(entityId);
     const edge = execution.edgeById.get(entityId);
@@ -383,14 +519,108 @@ function calculateRoute(route, input, state, execution) {
     const forceN = mass.massKg
       * projectDataValue(input.profile, 'loadCalculation.gravityMPerS2')
       * projectDataValue(input.profile, 'loadCalculation.loadFactor');
-    const accounting = edge.entityType === 'PIPE' && edge.lengthMm > 0
-      ? allocateSupportUniformLoad({ startMm: chainage.startMm, endMm: chainage.endMm, forceN, supports })
-      : allocateSupportPointLoad({ chainageMm: application.chainageMm, forceN, supports });
-    recordContribution(state, route, entity, chainage, application, mass, forceN, accounting);
+    items.push({
+      entity,
+      chainage,
+      application,
+      mass,
+      forceN,
+      distributed: edge.entityType === 'PIPE' && edge.lengthMm > 0,
+    });
+  });
+  items.push(...branchLoads.map((pending) => pending.item));
+
+  if (execution.spanModel && calculateRouteContinuousSpan(route, state, routeExecution, items)) return;
+  items.forEach((item) => {
+    const accounting = item.distributed
+      ? allocateSupportUniformLoad({ startMm: item.chainage.startMm, endMm: item.chainage.endMm, forceN: item.forceN, supports })
+      : allocateSupportPointLoad({ chainageMm: item.application.chainageMm, forceN: item.forceN, supports });
+    recordContribution(state, route, item.entity, item.chainage, item.application, item.mass, item.forceN, accounting);
   });
 }
 
+/**
+ * Option B for one route: solve the three-moment equation once for all loads,
+ * along plan length, with lift-off; then record each load's exact share. The
+ * solve is linear for the final set of bearing supports, so the per-load
+ * shares sum to the route total. Returns false (caller uses the V2 lever rule)
+ * when the route has fewer than two bearing stations, where three-moment
+ * continuity adds nothing and V2 keeps its overhang-moment bookkeeping.
+ */
+function calculateRouteContinuousSpan(route, state, routeExecution, items) {
+  const supports = routeExecution.supports;
+  const toPlanMm = routeExecution.toPlanMm;
+  const loads = items.map((item) => (item.distributed
+    ? { startMm: toPlanMm(item.chainage.startMm), endMm: toPlanMm(item.chainage.endMm), forceN: item.forceN }
+    : { chainageMm: toPlanMm(item.application.chainageMm), forceN: item.forceN }));
+  const solved = solveContinuousSpan({
+    supports: supports.map((support) => ({ siteId: support.siteId, chainageMm: support.planMm })),
+    loads,
+    method: THREE_MOMENT_LIFTOFF_V1,
+  });
+  if (solved.status !== 'RESOLVED') {
+    if (supports.length >= 2) {
+      state.exceptions.push({
+        code: 'CONTINUOUS_SPAN_UNRESOLVED_TRIBUTARY_FALLBACK',
+        routeId: route.routeId,
+        continuousSpanStatus: solved.status,
+        releasedSiteIds: solved.releasedSiteIds,
+      });
+    }
+    return false;
+  }
+
+  const chainageBySite = new Map(supports.map((support) => [support.siteId, support.chainageMm]));
+  const routeState = routeAccountingState(state, route.routeId);
+  routeState.momentReference = 'ROUTE_PLAN_LENGTH_ORIGIN';
+  solved.releasedSiteIds.forEach((siteId) => state.exceptions.push({
+    code: 'SUPPORT_LIFTOFF_RELEASED',
+    routeId: route.routeId,
+    supportSiteId: siteId,
+    supportChainageMm: chainageBySite.get(siteId),
+  }));
+  items.forEach((item, index) => {
+    const shares = solved.contributions[index].reactionsBySiteId;
+    const allocations = supports
+      .filter((support) => shares[support.siteId] !== 0)
+      .map((support) => ({
+        siteId: support.siteId,
+        verticalForceN: shares[support.siteId],
+        chainageMm: support.chainageMm,
+        planMm: solved.stationChainageBySiteId[support.siteId],
+      }));
+    const accounting = {
+      disposition: 'CONTINUOUS_SPAN_RESOLVED',
+      allocations,
+      boundaryTransfers: [],
+      unallocated: [],
+    };
+    const momentBasis = {
+      applicationPlanMm: loads[index].chainageMm ?? (loads[index].startMm + loads[index].endMm) / 2,
+    };
+    recordContribution(state, route, item.entity, item.chainage, item.application, item.mass, item.forceN, accounting, momentBasis);
+  });
+  return true;
+}
+
 function applyBranchTransfer(route, input, state, execution) {
+  const pending = releaseBranchTransfer(route, input, state, execution);
+  if (pending) recordBranchTransferTributary(pending, state, execution);
+}
+
+// Lever-rule (V2) placement of a released branch load on its host route.
+function recordBranchTransferTributary(pending, state, execution) {
+  const hostSupports = execution.routeById.get(pending.host.routeId).supports;
+  const { entity, chainage, application, mass, forceN } = pending.item;
+  const accounting = allocateSupportPointLoad({ chainageMm: application.chainageMm, forceN, supports: hostSupports });
+  recordContribution(state, pending.host, entity, chainage, application, mass, forceN, accounting);
+}
+
+/**
+ * Moves a branch route's virtual-support reaction off the virtual site and
+ * returns it as a point load for the host route (null when it is zero).
+ */
+function releaseBranchTransfer(route, input, state, execution) {
   const transfer = execution.routeById.get(route.routeId).branchTransfer;
   const forceN = state.reactions.get(transfer.virtualSiteId) ?? 0;
   const momentDemandNmm = state.boundaryMomentBySite.get(transfer.virtualSiteId) ?? 0;
@@ -407,10 +637,8 @@ function applyBranchTransfer(route, input, state, execution) {
     verticalForceN: forceN,
     branchMomentDemandNmm: momentDemandNmm,
   });
-  if (forceN === 0) return;
-  const hostSupports = execution.routeById.get(transfer.hostRouteId).supports;
+  if (forceN === 0) return null;
   const host = input.routePartitionModel.routes.find((row) => row.routeId === transfer.hostRouteId);
-  const accounting = allocateSupportPointLoad({ chainageMm: transfer.hostChainageMm, forceN, supports: hostSupports });
   const entity = {
     entityId: `BRANCH_TRANSFER:${route.branchId}`,
     sourceEntityId: null,
@@ -425,7 +653,7 @@ function applyBranchTransfer(route, input, state, execution) {
     massKg: 0,
     formula: { branchTransferFromRouteId: route.routeId, hostEntityId: transfer.hrefEntityId },
   };
-  recordContribution(state, host, entity, chainage, application, mass, forceN, accounting);
+  return { host, item: { entity, chainage, application, mass, forceN, distributed: false } };
 }
 
 function resolveLegacyCaseMass(execution, entity, edge, caseId, profile) {
@@ -783,7 +1011,9 @@ function projectPointToRoute(point, route, edgeById, tolerance) {
   return null;
 }
 
-function recordContribution(state, route, entity, routeChainage, application, mass, forceN, accounting) {
+// momentBasis (three-moment only): first moments are taken along plan length,
+// the coordinate the spans were solved in, so per-route moment closure holds.
+function recordContribution(state, route, entity, routeChainage, application, mass, forceN, accounting, momentBasis = null) {
   const contributionId = `${state.caseId}:${entity.entityId}`;
   const allocations = accounting.allocations || [];
   const boundaryTransfers = accounting.boundaryTransfers || [];
@@ -825,11 +1055,13 @@ function recordContribution(state, route, entity, routeChainage, application, ma
   }));
 
   const allocatedForceN = sum(allocations.map((row) => row.verticalForceN));
-  const reactionMomentNmm = sum(allocations.map((row) => row.verticalForceN * row.chainageMm));
+  const reactionMomentNmm = momentBasis
+    ? sum(allocations.map((row) => row.verticalForceN * row.planMm))
+    : sum(allocations.map((row) => row.verticalForceN * row.chainageMm));
   const boundaryTransferMomentNmm = sum(boundaryTransfers.map((row) => row.momentDemandNmm));
   const unallocatedForceN = sum(unallocated.map((row) => row.verticalForceN));
   const unallocatedMomentNmm = sum(unallocated.map((row) => row.firstMomentNmm));
-  const evaluatedMomentNmm = forceN * application.chainageMm;
+  const evaluatedMomentNmm = forceN * (momentBasis ? momentBasis.applicationPlanMm : application.chainageMm);
 
   state.evaluatedMassKg += mass.massKg;
   state.evaluatedForceN += forceN;
@@ -868,6 +1100,7 @@ function recordContribution(state, route, entity, routeChainage, application, ma
     massKg: mass.massKg,
     verticalForceN: forceN,
     chainageMm: application.chainageMm,
+    ...(momentBasis ? { planMm: momentBasis.applicationPlanMm } : {}),
     formula,
     accountingDisposition: accounting.disposition,
     allocations,
@@ -936,7 +1169,7 @@ function equilibriumCheck(state, profile) {
     .sort(([left], [right]) => ascii(left, right))
     .map(([routeId, row]) => ({
       routeId,
-      momentReference: 'ROUTE_CHAINAGE_ORIGIN',
+      momentReference: row.momentReference || 'ROUTE_CHAINAGE_ORIGIN',
       ...evaluateSupportLoadAccounting({
         ...row,
         forceToleranceN: forceLimit,
