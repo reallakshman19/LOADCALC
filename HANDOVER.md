@@ -137,9 +137,9 @@ In `support-load-distribution-v3.js`, `calculateRoute()`:
 ### Steps 1–7: guide and line stop loads
 These follow [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md):
 1. restraint table: **done 2026-11-26** (`src/workspace/support-sites/support-restraint-table.js`, `node benchmarks/checks/1885s-restraint-table.mjs`); an in-app review screen is still to do
-2. legs and free growth (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
-3. friction (ACCURATE): **design friction μ × N_OPE done 2026-11-27** (`src/workspace/support-sites/support-friction-loads.js`, shown in the Results OPE table via `currentFrictionLoads()` in `load-calc-consumer-controller.js`); movement-based friction needs steps 2 and 4
-4. line stop axial
+2. legs and free growth: **legs done 2026-11-27** (`src/workspace/routes/route-legs.js`); free growth waits for real temperatures (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
+3. friction (ACCURATE): **design friction μ × N_OPE done 2026-11-27** (`src/workspace/support-sites/support-friction-loads.js`, shown in the Results OPE table via `currentFrictionLoads()` in `load-calc-consumer-controller.js`); movement-based friction needs free growth and neutral points
+4. line stop axial: **friction part done 2026-11-27** (`src/workspace/support-sites/support-line-stop-loads.js`, Results page under the OPE table; design = larger side). The push from adjacent legs (SCREENING) needs temperatures
 5. guide lateral (SCREENING bounds)
 6. optional wind/seismic
 7. tests and cross-check against `src/core/empirical-piping-mechanics/thermal-restraint-compatibility.js` on simple L and Z cases

@@ -214,6 +214,35 @@ Movement-based friction (zero where the pipe does not move) is reported as 0 whi
 
 1885S OPE (browser Run 2026-11-27): 25 sliding supports, total design friction 24,073 N; equilibrium PASSED and coverage 100 % unchanged. Hand checks: PS-12059 R 0.3 × 8,234 = 2,470 N; PS-12242 R+G 751 N along the pipe; PS-12243 R+LS 811 N across; PS-12060 R+G+LS 0 N; lifted-off PS-12249 0 N. μ is the 0.3 default everywhere until PTFE plates are known.
 
+#### Line stop axial loads, friction part (guide / line stop plan, steps 2 and 4, 2026-11-27)
+
+- `src/workspace/routes/route-legs.js` splits each route into straight legs. A leg runs through flanges, valves, reducers and the run of a tee, and ends at an elbow, a bend or any change of direction (sloped offsets included). "On one line" means within `topology.portMatchToleranceMm` (1 mm for 1885S). 1885S: 47 legs, 33 straight.
+- `src/workspace/support-sites/support-line-stop-loads.js`: for each line stop, the axial friction on each side along its own leg, from the stop to the leg end or the next axial stop. **Design axial = the larger side**, because one side may not slide (for example on start-up). The net value (|start − end|, only if both sides slide fully) is shown too. Label ACCURATE.
+- Friction beyond an elbow acts along the next leg. It reaches the stop only by bending the elbow, which is the thermal push (SCREENING, not built).
+- Two stops on one leg raise the design finding `TWO_AXIAL_STOPS_ON_ONE_LEG` (none in 1885S).
+- An unknown support or a missing vertical result on a held side blocks that stop.
+- Shown on the Results page under the OPE table. Test: `tests/support-line-stop-loads.test.mjs`.
+
+1885S OPE (browser Run 2026-11-27), μ 0.3; equilibrium PASSED, coverage 100 %:
+
+| Line stop | Type | Leg (mm) | Start side (N) | End side (N) | Design axial (N) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| PS-12248 | R+G+LS | 9,880 | 4,494 (3 rests) | 0 | 4,494 |
+| PS-12060 | R+G+LS | 5,497 | 2,470 | 0 | 2,470 |
+| PS-12240 | R+LS | 13,792 | 1,397 (incl. guide PS-12242) | 565 | 1,397 |
+| PS-12034 (8″ S8810103) | R+LS | 5,573 | 1,271 | 0 | 1,271 |
+| PS-12169 | R+G+LS | 14,642 | 928 | 1,013 | 1,013 |
+| PS-12034 (6″ S8810112) | R+G+LS | 5,594 | 739 | 0 | 739 |
+| PS-12295 | R+LS | 7,034 | 545 | 0 | 545 |
+| PS-12231 | R+LS | 5,521 | 0 | 443 | 443 |
+| PS-12268 | R+G+LS | 4,844 | 255 | 0 | 255 |
+| PS-12243 | R+LS | 2,142 | 0 | 0 | 0 |
+| PS-12166 | R+LS | 1,776 | 0 | 0 | 0 |
+
+Hand checks: PS-12248 (8,772 + 2,453 + 3,756) × 0.3 = 4,494 N; PS-12240 (2,503 + 2,154) × 0.3 = 1,397 N and 1,883 × 0.3 = 565 N.
+
+Open point: on S8811951/B2, PS-12248's leg ends at a 16° sloped offset (146 mm long). The leg past it (PS-12249 lifted off, PS-12250) is not counted. A shallow offset passes most axial load in practice; counting through it needs an owner decision.
+
 #### First benchmark results review (2026-11-26)
 
 Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.

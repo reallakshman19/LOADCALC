@@ -78,9 +78,9 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 | --- | --- | --- | --- |
 | 0 | Option B (three-moment with lift-off) for vertical loads. **Done 2026-11-26**, in the Run as CONTINUOUS_SPAN_THREE_MOMENT_V1 | — | ACCURATE |
 | 1 | Restraint table proposal and support-function mapping. **Done 2026-11-26** as data + script (`support-restraint-table.js`); an in-app review screen is still to do | — | data |
-| 2 | Leg decomposition and free growth (reuse thermal-free-movement) | 1, temperatures | data |
-| 3 | Friction loads, movement-based and design. **Design friction done 2026-11-27** (`support-friction-loads.js`, Results page); movement-based waits for steps 2 and 4 | 0, 2 | ACCURATE |
-| 4 | Line stop axial: friction part, then the flexibility upper bound | 3 | ACCURATE + SCREENING |
+| 2 | Leg decomposition and free growth (reuse thermal-free-movement). **Legs done 2026-11-27** (`route-legs.js`); free growth waits for temperatures | 1, temperatures | data |
+| 3 | Friction loads, movement-based and design. **Design friction done 2026-11-27** (`support-friction-loads.js`, Results page); movement-based waits for free growth and neutral points | 0, 2 | ACCURATE |
+| 4 | Line stop axial: friction part, then the flexibility upper bound. **Friction part done 2026-11-27** (`support-line-stop-loads.js`, Results page; design = larger side, net also shown) | 3 | ACCURATE + SCREENING |
 | 5 | Guide lateral: guided-cantilever bounds and the too-close-to-elbow flag | 2 | SCREENING |
 | 6 | Optional occasional g-factor loads | 0, 1 | ACCURATE |
 | 7 | Hand-calc test suite, cross-check, 1885S results table in ROADMAP | each step | — |

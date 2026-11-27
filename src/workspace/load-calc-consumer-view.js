@@ -664,12 +664,34 @@ function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
     ${frictionNote}
     <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th>${frictionHead}<th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
     <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td>${frictionCells(row.supportSiteId)}<td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
+    ${friction ? lineStopMarkup(frictionLoads.lineStops, acceptedCurrent) : ''}
     <details ${loadCase.status === 'CALCULATED_WITH_EXCEPTIONS' ? 'open' : ''}><summary>Exceptions (${integer(loadCase.exceptionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.exceptionLedger || [], null, 2))}</pre></details>
     <details><summary>Contribution ledger (${integer(loadCase.contributionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.contributionLedger || [], null, 2))}</pre></details>
     <details><summary>Excluded inputs (${integer(loadCase.excludedInputs?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.excludedInputs || [], null, 2))}</pre></details>
     <details><summary>Equilibrium / route closure</summary><pre>${escapeHtml(JSON.stringify(loadCase.equilibrium || null, null, 2))}</pre></details>
   </section>`;
   }).join('');
+}
+
+// Line stop axial loads, friction part (guide / line stop plan, step 4).
+function lineStopMarkup(lineStops, accepted) {
+  if (!lineStops?.rows?.length) return '';
+  const tagOf = (row) => row.tags?.find((tag) => tag.startsWith('PS-')) || row.tags?.[0] || row.siteId;
+  const sideCell = (side) => {
+    if (!side) return '<td>—</td>';
+    const value = side.frictionN === null ? escapeHtml(side.status) : force(side.frictionN, accepted);
+    const ends = side.boundary.kind === 'NEXT_STOP' ? 'to next stop' : 'to leg end';
+    return `<td>${value} <small>(${integer(side.supports.length)} supports, ${ends})</small></td>`;
+  };
+  const body = lineStops.rows.map((row) => {
+    const [start, end] = row.sides;
+    const finding = row.findings?.length ? ` <small>${escapeHtml(row.findings.map((f) => f.code).join(', '))}</small>` : '';
+    return `<tr data-line-stop-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${Number.isFinite(row.leg?.lengthMm) ? `${Math.round(row.leg.lengthMm)} mm` : '—'}</td>${sideCell(start)}${sideCell(end)}<td>${row.designAxialN === null ? escapeHtml(row.status) : force(row.designAxialN, accepted)}${finding}</td><td>${row.netAxialN === null ? '—' : force(row.netAxialN, accepted)}</td><td>not built (thermal, SCREENING)</td></tr>`;
+  }).join('');
+  return `<h3>Line stops: axial load, friction part (ACCURATE)</h3>
+    <p class="line-stop-basis">${escapeHtml(lineStops.basis)}</p>
+    <table class="line-stop-loads"><thead><tr><th>Line stop</th><th>Type</th><th>Leg length</th><th>Friction, start side (N)</th><th>Friction, end side (N)</th><th>Design axial (N)</th><th>Net if both sides slide (N)</th><th>Push from other legs</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
 }
 
 function completenessMarkup(audit, status, current) {

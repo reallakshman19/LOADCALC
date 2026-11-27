@@ -37,6 +37,8 @@ import {
 import { SUPPORT_RESTRAINT_EVENTS } from './support-restraint-events.js';
 import { buildSupportRestraintTable } from './support-sites/support-restraint-table.js';
 import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
+import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
+import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
 const EMPIRICAL_SCENARIO_VIEW_TABS = new Set([
@@ -818,28 +820,37 @@ export class LoadCalcConsumerController {
   }
 }
 
+// Design friction (guide / line stop plan, step 3) and line stop axial
+// friction (step 4) for the Results page. An extra view on the vertical Run:
+// a failure here hides those columns and never blocks the Results page.
+function currentFrictionLoads(distribution) {
+  if (!distribution?.loadCases?.length) return null;
+  let friction = null;
+  try {
+    const profile = projectDataStore.getProfile();
+    const routePartitionModel = engineeringModelStore.getRoutePartitionModel();
+    const restraintTable = buildSupportRestraintTable({
+      supportSiteModel: engineeringModelStore.getSupportSiteModel(),
+      routePartitionModel,
+      profile,
+    });
+    friction = buildSupportFrictionLoads({ restraintTable, distribution, profile });
+    const lineStops = buildSupportLineStopLoads({
+      restraintTable,
+      frictionLoads: friction,
+      routeLegs: buildRouteLegs({ routePartitionModel, profile }),
+    });
+    return Object.freeze({ ...friction, lineStops });
+  } catch (error) {
+    console.warn('Friction or line stop loads not shown:', error);
+    return friction;
+  }
+}
+
 /**
  * Projects read-only progress for the guided UI. It never supplies missing
  * values or changes the stores that own engineering readiness and authority.
  */
-// Design friction (guide / line stop plan, step 3) for the Results table. An
-// extra view on the vertical Run: a failure here hides the friction columns
-// and never blocks the Results page.
-function currentFrictionLoads(distribution) {
-  if (!distribution?.loadCases?.length) return null;
-  try {
-    const profile = projectDataStore.getProfile();
-    const restraintTable = buildSupportRestraintTable({
-      supportSiteModel: engineeringModelStore.getSupportSiteModel(),
-      routePartitionModel: engineeringModelStore.getRoutePartitionModel(),
-      profile,
-    });
-    return buildSupportFrictionLoads({ restraintTable, distribution, profile });
-  } catch (error) {
-    console.warn('Friction loads not shown:', error);
-    return null;
-  }
-}
 
 function createWorkflowReadiness(context, topologyCheck) {
   const supportSites = engineeringModelStore.getSupportSiteModel();
