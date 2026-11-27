@@ -69,7 +69,7 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 
 ## 4. 1885S data gaps (blockers)
 - **Operating temperatures**: Project Data has `operatingTemperaturesC = { DEFAULT: 21 }`, which equals the installation temperature, so ΔT = 0 and every thermal and movement-based friction load is zero. The source calls 11 supports "Directional Anchor On Shoe for **Hot Insulated** Pipe", so real temperatures per line are needed.
-- **Support functions**: 91 REST, 11 LINESTOP (these appear to be the ST06 directional anchors), 6 GUIDE (GT01 family), 31 with a blank SUPPORT_TYPE, and PS-12297 (FT17-7.6). The blanks need a mapping.
+- **Support functions**: 91 REST, 11 LINESTOP (the ST06 directional anchors), 6 GUIDE (GT01 family) and 31 parts with a blank SUPPORT_TYPE. **Resolved 2026-11-26:** 25 of the 31 are frame parts on supports that already have a typed part; the owner set PS-12297 = REST and the other 5 to NONE, and PS-12248's line stop part was merged into its support.
 - **Friction**: μ 0.3 (steel) and 0.1 (PTFE) are approved defaults; which supports have PTFE slide plates is not known.
 - **Occasional loads**: wind or seismic g-factors, only if the project wants them.
 
@@ -77,7 +77,7 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 | # | Work | Depends on | Output label |
 | --- | --- | --- | --- |
 | 0 | Option B (three-moment with lift-off) for vertical loads. **Done 2026-11-26**, in the Run as CONTINUOUS_SPAN_THREE_MOMENT_V1 | — | ACCURATE |
-| 1 | Restraint table proposal and support-function mapping | — | data |
+| 1 | Restraint table proposal and support-function mapping. **Done 2026-11-26** as data + script (`support-restraint-table.js`); an in-app review screen is still to do | — | data |
 | 2 | Leg decomposition and free growth (reuse thermal-free-movement) | 1, temperatures | data |
 | 3 | Friction loads, movement-based and design | 0, 2 | ACCURATE |
 | 4 | Line stop axial: friction part, then the flexibility upper bound | 3 | ACCURATE + SCREENING |

@@ -153,7 +153,7 @@ Route S8811951/B2 in the Run vs the independent beam (EMPTY):
 | B in the Run (N) | 3,733 | 2,439 | 8,753 | 3,418 | 0 | 7,316 |
 | B vs beam | +0.2 % | −0.7 % | +0.1 % | +0.3 % | 0 | −0.1 % |
 
-Every bearing support, vertical force in N. "EMPTY V2" is V2 recomputed from the same Run's loads and supports (it reproduces the earlier V2 Run on B2 exactly). The 7 supports at 0 N before (non-bearing types, the LINESTOP, PS-12297) are still 0 N and are not listed. OPE = HYD on most lines because both use the 1000 kg/m³ fallback; S8811951 uses 67 kg/m³ for OPE.
+Every bearing support, vertical force in N. "EMPTY V2" is V2 recomputed from the same Run's loads and supports (it reproduces the earlier V2 Run on B2 exactly). The 5 points that are not supports carry 0 N and are not listed. OPE = HYD on most lines because both use the 1000 kg/m³ fallback; S8811951 uses 67 kg/m³ for OPE.
 
 | Route | Support ch (mm) | Tag | EMPTY V2 | EMPTY B | B vs V2 | OPE B | HYD B |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
@@ -167,10 +167,11 @@ Every bearing support, vertical force in N. "EMPTY V2" is V2 recomputed from the
 | 6″-S8810111/B1 | 9,234 | PS-12242 | 2,041 | 1,935 | −5.2 % | 2,503 | 2,503 |
 | 6″-S8810111/B1 | 13,884 | PS-12240 | 2,501 | 2,871 | +14.8 % | 3,680 | 3,680 |
 | 6″-S8810111/B1 | 18,640 | PS-12061 | 1,698 | 1,468 | −13.5 % | 1,883 | 1,883 |
-| 6″-S8810111/B2 | 2,891 | PS-12165 | 2,726 | 2,889 | +6.0 % | 3,641 | 3,641 |
-| 6″-S8810111/B2 | 7,505 | PS-12169 | 2,978 | 2,775 | −6.8 % | 3,593 | 3,593 |
-| 6″-S8810111/B2 | 14,091 | PS-12170 | 2,512 | 2,793 | +11.2 % | 3,556 | 3,556 |
-| 6″-S8810111/B2 | 17,098 | PS-12156 | 1,835 | 1,594 | −13.1 % | 1,964 | 1,964 |
+| 6″-S8810111/B2 | 845 | PS-12297 * | 0 | 824 | new REST | 1,004 | 1,004 |
+| 6″-S8810111/B2 | 2,891 | PS-12165 * | 2,726 | 1,616 | −40.7 % | 2,088 | 2,088 |
+| 6″-S8810111/B2 | 7,505 | PS-12169 * | 2,978 | 3,306 | +11.0 % | 4,241 | 4,241 |
+| 6″-S8810111/B2 | 14,091 | PS-12170 * | 2,512 | 2,647 | +5.4 % | 3,378 | 3,378 |
+| 6″-S8810111/B2 | 17,098 | PS-12156 * | 1,835 | 1,658 | −9.6 % | 2,043 | 2,043 |
 | 6″-S8810112/B6 | 2,530 | PS-12228 | 2,148 | 1,888 | −12.1 % | 2,465 | 2,465 |
 | 6″-S8810112/B6 | 5,691 | PS-12034 | 2,303 | 2,563 | +11.3 % | 3,043 | 3,043 |
 | 6″-S8811951/B2 | 1,493 | PS-12244 | 3,792 | 3,733 | −1.6 % | 3,756 | 4,063 |
@@ -188,7 +189,22 @@ Every bearing support, vertical force in N. "EMPTY V2" is V2 recomputed from the
 | 8″-S8810103/B1 | 2,825 | PS-12228 | 3,725 | 3,334 | −10.5 % | 4,237 | 4,237 |
 | 8″-S8810103/B1 | 5,985 | PS-12034 | 3,837 | 4,228 | +10.2 % | 5,076 | 5,076 |
 
+\* S8810111/B2 rows are after the owner's support-type decisions below (PS-12297 = REST); "EMPTY V2" there is the earlier V2 Run, without PS-12297. Route total is unchanged (10,051 N EMPTY).
+
 Only B2 has an independent reference. The other routes' B numbers are not yet checked against a stiffness reference; a CAESAR II (or similar) run for 1885S is still needed to measure the 90 % target on every support. Insulation is still the 0 mm SAMPLE ASSUMPTION.
+
+#### Support restraint table (guide / line stop plan, step 1, 2026-11-26)
+
+`src/workspace/support-sites/support-restraint-table.js` builds one row per support site: type code (R, R+G, R+LS, R+G+LS, NONE), restrained directions (vertical up only with lift-off; axial and lateral relative to the pipe at the site), friction directions with μ, gap, pipe direction and chainage, and whether the type came from the source or an owner decision. A site with an unknown type is BLOCKED, never treated as a REST. Print it: `node benchmarks/checks/1885s-restraint-table.mjs` (`--json` for the full rows). Test: `tests/support-restraint-table.test.mjs`.
+
+Owner decisions (2026-11-26), stored in Project Data with that evidence:
+- **PS-12297 = REST** (`topology.supportTypeOverridesByTag`, a new optional field used only where the source type is blank). It only has a frame part (TYPE-108, FT17-7.6). It now carries 824 N EMPTY on S8810111/B2.
+- **PS-12248 is one R+G+LS support.** Its line stop part sat 0.205 mm from its rest/guide parts, so it was a separate site at 0 N. The support grouping tolerance is now 1 mm (was 0.1 mm); the next-closest pair of separate supports is 571 mm apart, so nothing else merges. 1885S now has 36 support sites (was 37).
+- **5 points are NONE (not supports):** bare ATTA-20 =1006649732/51465, bare ATTA-150 =1006649732/51422 and =1006649732/51254, PENE-150 floor openings =1006657924/39580 and =1006649732/51378.
+
+1885S result: 19 R, 6 R+LS, 1 R+G, 5 R+G+LS, 5 NONE, 0 blocked; every support sits on horizontal pipe. μ is the 0.3 default everywhere (which supports have PTFE plates is still unknown); gaps are the 0 mm default. Browser Run after the decisions: equilibrium PASSED, coverage 100 % in EMPTY / OPE / HYD, same applied loads.
+
+Not built yet: a review screen for the table in the app (today it is a script and a data module).
 
 #### First benchmark results review (2026-11-26)
 

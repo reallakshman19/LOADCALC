@@ -9,7 +9,7 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 - **App:** a Vite + vanilla JS app. It holds Load Calc (empirical, non-FEA pipe support loads) and 3D Edit, extracted from [Advanced_Analysis](https://github.com/reallakshman19/Advanced_Analysis).
 - **Repo:** public, https://github.com/reallakshman19/LOADCALC, branch `main`. There is no LICENSE, and that is the owner's decision.
 - **Benchmark:** 1885S, `benchmarks/Sjson.json`, also served as `public/fixtures/Sjson.json`.
-  - 279 entities, 43 pipes, 139 support attachments, 37 support sites.
+  - 279 entities, 43 pipes, 139 support attachments, 36 support sites (37 before PS-12248 was merged).
   - 5 lines: 8810101, 8810103, 8810111, 8810112, 8811951.
 
 ## 2. Owner decisions (do not re-ask)
@@ -23,6 +23,7 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 | 2026-11-26 | Insulation thickness 0 mm, as a SAMPLE ASSUMPTION (`1885S_INSULATION_THICKNESS_SAMPLE_ZERO` in `project-data/1885s-project-data-profile.json`). |
 | 2026-11-26 | **Accuracy target 90 %:** each support's vertical load within about 10 % of a stiffness-based reference. |
 | 2026-11-26 | **No beam solver / FE.** A whole-system stiffness solve is LFEA scope. Improve the *empirical* calculation instead. |
+| 2026-11-26 | **Support types:** PS-12297 = REST; 5 bare ATTA / PENE floor-opening points = NONE (not supports); PS-12248 is one R+G+LS support (grouping tolerance 1 mm). In `project-data/1885s-project-data-profile.json`. |
 | 2026-11-26 | **Option B approved as empirical** (three-moment hand calc with lift-off). Wired into the Run as `CONTINUOUS_SPAN_THREE_MOMENT_V1`, the AUTO default; V2 stays selectable. Weight and friction results are labelled ACCURATE; guide / line stop thermal results are SCREENING bounds only. |
 
 **Never commit** client documents. The client Line List `.xlsx` lives outside the repo; only the derived sample CSV is committed. Never commit secrets either. Keep the owner's personal details out of commits and external requests.
@@ -135,7 +136,7 @@ In `support-load-distribution-v3.js`, `calculateRoute()`:
 
 ### Steps 1–7: guide and line stop loads
 These follow [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md):
-1. restraint table
+1. restraint table: **done 2026-11-26** (`src/workspace/support-sites/support-restraint-table.js`, `node benchmarks/checks/1885s-restraint-table.mjs`); an in-app review screen is still to do
 2. legs and free growth (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
 3. friction (ACCURATE)
 4. line stop axial
@@ -156,7 +157,7 @@ The repo also registers `EMPIRICAL_RESTRAINT_NETWORK_V1/V2` (guide/line stop the
 1. ~~Approve Option B as empirical?~~ Approved 2026-11-26.
 2. Operating temperatures per line. Project Data has `DEFAULT: 21 °C` = installation, so every thermal load would be zero, yet 11 supports are "Directional Anchor … Hot Insulated Pipe".
 3. Real insulation thickness per line (it is 0 mm now).
-4. Which supports have PTFE slide plates (μ 0.1, versus 0.3 default)? Function of the 31 supports with blank SUPPORT_TYPE?
+4. Which supports have PTFE slide plates (μ 0.1, versus 0.3 default)? (Blank support types: resolved 2026-11-26.)
 5. Wind/seismic g-factors, if wanted.
 6. A CAESAR II (or other) result for 1885S, to measure the 90 % target for real.
 
