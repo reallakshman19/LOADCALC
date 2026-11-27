@@ -1,5 +1,8 @@
 import { freezeDeep, stringValue } from '../dataset-utils.js';
-import { projectDataValue } from '../project-data/project-data-contract.js';
+import { projectDataEntry, projectDataValue } from '../project-data/project-data-contract.js';
+
+export const SUPPORT_TYPE_OVERRIDE_PATH = 'topology.supportTypeOverridesByTag';
+export const SUPPORT_TYPE_OVERRIDE_VALUES = Object.freeze(['REST', 'GUIDE', 'LINESTOP', 'NONE']);
 import {
   createNonFeaProductDefaultProvider,
 } from '../project-data/non-fea-product-default-profile.js';
@@ -28,7 +31,9 @@ export function buildSupportSiteModel(dataset, profile) {
   if (!sourceAxisBasis) {
     blockers.push({ code: 'INVALID_SUPPORT_SITE_SOURCE_UP_AXIS', projectDataPath: 'sourcesAndUnits.sourceUpAxis', value: sourceUpAxis || null });
   }
-  const members = dataset.entities.filter((entity) => entity.category === 'support').map(toMember);
+  const typeOverrides = supportTypeOverrides(effectiveProfile, blockers);
+  const members = dataset.entities.filter((entity) => entity.category === 'support')
+    .map((entity) => applyTypeOverride(toMember(entity), typeOverrides));
   const assemblyGroups = groupMembers(members, tolerance);
   const assemblies = [...assemblyGroups.values()].map(toAssembly);
   const siteGroups = groupAssembliesByLocation(assemblies, tolerance);
@@ -73,6 +78,36 @@ function toMember(entity) {
     positionMm: point,
     dtxr: stringValue(attributes.DTXR),
   });
+}
+
+/**
+ * Approved Project Data types for supports whose source SUPPORT_TYPE is blank.
+ * A source type always wins; NONE is kept off the member (the support stays
+ * typeless and non-bearing) and is read by the restraint table instead.
+ */
+function supportTypeOverrides(profile, blockers) {
+  const entry = projectDataEntry(profile, SUPPORT_TYPE_OVERRIDE_PATH);
+  if (!entry || entry.value === null || entry.value === undefined) return new Map();
+  if (entry.approved !== true || !entry.value || typeof entry.value !== 'object' || Array.isArray(entry.value)) {
+    blockers.push({ code: 'SUPPORT_TYPE_OVERRIDES_NOT_APPROVED_OR_INVALID', projectDataPath: SUPPORT_TYPE_OVERRIDE_PATH });
+    return new Map();
+  }
+  const map = new Map();
+  Object.entries(entry.value).forEach(([tag, value]) => {
+    const type = stringValue(value).toUpperCase();
+    if (!SUPPORT_TYPE_OVERRIDE_VALUES.includes(type)) {
+      blockers.push({ code: 'SUPPORT_TYPE_OVERRIDE_INVALID', projectDataPath: SUPPORT_TYPE_OVERRIDE_PATH, tag, value });
+      return;
+    }
+    map.set(tag, type);
+  });
+  return map;
+}
+
+function applyTypeOverride(member, overrides) {
+  const type = overrides.get(member.tag);
+  if (!type || member.sourceType || type === 'NONE') return member;
+  return freezeDeep({ ...member, sourceType: type, sourceTypeAuthority: 'PROJECT_DATA_SUPPORT_TYPE_OVERRIDE' });
 }
 
 function canonicalTag(attributes, entity) {

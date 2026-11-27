@@ -29,18 +29,19 @@ const model = buildViewportRenderModel(resolved);
 assert.equal(model.schema, VIEWPORT_RENDER_MODEL_SCHEMA);
 assert.equal(dataset.summary.nodeCount, 279);
 assert.equal(supportSites.summary.sourceSupportRecordCount, 139);
-assert.equal(supportSites.summary.supportAssemblyCount, 38);
-assert.equal(supportSites.summary.physicalLocationCount, 37);
-assert.equal(model.summary.renderableCount, 150);
+// 1885S owner decision 2026-11-26: PS-12248's line stop part (0.205 mm away) merges into its site.
+assert.equal(supportSites.summary.supportAssemblyCount, 37);
+assert.equal(supportSites.summary.physicalLocationCount, 36);
+assert.equal(model.summary.renderableCount, 149);
 assert.equal(model.summary.segmentCount, 116);
-assert.equal(model.summary.pointCount, 37);
+assert.equal(model.summary.pointCount, 36);
 assert.equal(model.summary.skippedCount, 27);
 const items = [
   ...model.physicalPrimitives,
   ...model.supportOverlayPrimitives,
   ...model.diagnosticPrimitives,
 ];
-assert.equal(model.supportOverlayPrimitives.length, 37);
+assert.equal(model.supportOverlayPrimitives.length, 36);
 assert.equal(model.diagnosticPrimitives.length, 0);
 assert.equal(items.some((item) => item.objectId === '=1006649732/51250'), true);
 assert.ok(model.bounds.radius > 0);

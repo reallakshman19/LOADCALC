@@ -21,6 +21,9 @@ export const PROJECT_DATA_GROUPS = Object.freeze([
     field('autoCarrierCoincidenceToleranceMm', 'AUTO-carrier coincidence tolerance', 'number', 'mm'),
     field('routeJoiningRules', 'Route-joining rules', 'json', 'Topology'),
     field('supportTypeCapabilities', 'Support-type capability mapping', 'json', 'Loads'),
+    // { "<support tag>": "REST" | "GUIDE" | "LINESTOP" | "NONE" }; used only where
+    // the source SUPPORT_TYPE is blank. NONE records "not a support" explicitly.
+    field('supportTypeOverridesByTag', 'Support type for blank-type supports, by tag', 'json', 'Restraint table'),
     field('pipingClassMappings', 'Approved piping-class mappings', 'json', 'Master matching'),
   ]),
   group('editing', 'Editing', [
