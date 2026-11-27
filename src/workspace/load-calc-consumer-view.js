@@ -686,7 +686,7 @@ function lineStopMarkup(lineStops, accepted) {
   const body = lineStops.rows.map((row) => {
     const [start, end] = row.sides;
     const finding = row.findings?.length ? ` <small>${escapeHtml(row.findings.map((f) => f.code).join(', '))}</small>` : '';
-    return `<tr data-line-stop-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${Number.isFinite(row.leg?.lengthMm) ? `${Math.round(row.leg.lengthMm)} mm` : '—'}</td>${sideCell(start)}${sideCell(end)}<td>${row.designAxialN === null ? escapeHtml(row.status) : force(row.designAxialN, accepted)}${finding}</td><td>${row.netAxialN === null ? '—' : force(row.netAxialN, accepted)}</td><td>not built (thermal, SCREENING)</td></tr>`;
+    return `<tr data-line-stop-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${Number.isFinite(row.leg?.lengthMm) ? `${Math.round(row.leg.lengthMm)} mm` : '—'}${row.leg?.offsets?.length ? ` <small>(through ${integer(row.leg.offsets.length)} offset${row.leg.offsets.length > 1 ? 's' : ''}, ${escapeHtml(row.leg.offsets.map((o) => `${o.angleDeg}°`).join(', '))})</small>` : ''}</td>${sideCell(start)}${sideCell(end)}<td>${row.designAxialN === null ? escapeHtml(row.status) : force(row.designAxialN, accepted)}${finding}</td><td>${row.netAxialN === null ? '—' : force(row.netAxialN, accepted)}</td><td>not built (thermal, SCREENING)</td></tr>`;
   }).join('');
   return `<h3>Line stops: axial load, friction part (ACCURATE)</h3>
     <p class="line-stop-basis">${escapeHtml(lineStops.basis)}</p>

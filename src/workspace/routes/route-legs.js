@@ -1,5 +1,5 @@
 import { freezeDeep } from '../dataset-utils.js';
-import { projectDataValue } from '../project-data/project-data-contract.js';
+import { projectDataEntry, projectDataValue } from '../project-data/project-data-contract.js';
 import { createNonFeaProductDefaultProvider } from '../project-data/non-fea-product-default-profile.js';
 
 // Guide and line stop work, step 2 (docs/guide-line-stop-load-plan.md), the
@@ -11,9 +11,19 @@ import { createNonFeaProductDefaultProvider } from '../project-data/non-fea-prod
 // topology.portMatchToleranceMm of the leg's line, going forward.
 // Elbows and bends are kept as their own BEND legs, so every piece is in
 // exactly one leg. Free thermal growth per leg waits for real temperatures.
+//
+// Axial runs (for line stop loads): legs joined through shallow offsets. When
+// one or more legs, each sloped at most topology.legOffsetMaxAngleDeg to a
+// straight leg, lead back to a leg running the same way, the pipe carries
+// axial load straight through the step (a short offset is very stiff), so
+// they form one run. Only an approved angle is used; without one each
+// straight leg is its own run. Elbows and turns above the angle end a run.
 
-export const ROUTE_LEGS_SCHEMA = 'route-legs/v1';
+export const ROUTE_LEGS_SCHEMA = 'route-legs/v2';
+export const LEG_OFFSET_ANGLE_PATH = 'topology.legOffsetMaxAngleDeg';
 const BEND_TYPES = /^(ELBO|ELBOW|BEND)$/u;
+// "Running the same way": axes within 0.25 degrees (cos 0.25 deg).
+const SAME_WAY_COS = Math.cos((0.25 * Math.PI) / 180);
 
 /**
  * @param {object} input
@@ -33,19 +43,83 @@ export function buildRouteLegs({ routePartitionModel, profile } = {}) {
       legs: [],
     });
   }
+  const offset = offsetAngle(profile);
   const edgeById = new Map(routePartitionModel.edges.map((edge) => [edge.entityId, edge]));
-  const legs = routePartitionModel.routes
+  const routeRows = routePartitionModel.routes
     .filter((route) => route.status === 'READY')
-    .flatMap((route) => routeLegs(route, edgeById, toleranceMm));
+    .map((route) => routeLegs(route, edgeById, toleranceMm));
+  const legs = routeRows.flat();
+  const axialRuns = routeRows.flatMap((rows) => axialRunsOf(rows, offset.maxAngleDeg));
   return freezeDeep({
     schema: ROUTE_LEGS_SCHEMA,
     status: 'READY',
     blockers: [],
     toleranceMm,
+    offsetMaxAngleDeg: offset.maxAngleDeg,
+    offsetRule: offset.note,
     basis: 'Straight legs in route chainage order; a leg ends at an elbow, bend or any change of direction.',
     legs,
+    axialRuns,
   });
 }
+
+function offsetAngle(profile) {
+  const entry = profile ? projectDataEntry(profile, LEG_OFFSET_ANGLE_PATH) : null;
+  if (!entry) return { maxAngleDeg: null, note: 'Not set: every change of direction ends a run.' };
+  if (entry.approved !== true || !Number.isFinite(entry.value) || entry.value <= 0 || entry.value >= 90) {
+    return { maxAngleDeg: null, note: `${LEG_OFFSET_ANGLE_PATH} is not approved or not between 0 and 90 degrees: not used.` };
+  }
+  return { maxAngleDeg: entry.value, note: `Sloped offsets of ${entry.value} degrees or less between legs running the same way count as straight.` };
+}
+
+// Joins one route's legs (in order) into axial runs.
+function axialRunsOf(legs, maxAngleDeg) {
+  const runs = [];
+  let i = 0;
+  while (i < legs.length) {
+    const first = legs[i];
+    if (first.kind !== 'STRAIGHT') { i += 1; continue; }
+    const members = [first];
+    const offsets = [];
+    let j = i + 1;
+    while (maxAngleDeg !== null && j < legs.length) {
+      // Look past shallow pieces for a leg running the same way as `first`.
+      let k = j;
+      const between = [];
+      while (k < legs.length && !sameWay(legs[k], first) && offsetAngleDeg(legs[k], first) <= maxAngleDeg) {
+        between.push(legs[k]); k += 1;
+      }
+      if (!between.length || k >= legs.length || legs[k].kind !== 'STRAIGHT' || !sameWay(legs[k], first)) break;
+      between.forEach((leg) => offsets.push({ legId: leg.legId, kind: leg.kind, angleDeg: round(offsetAngleDeg(leg, first), 0.1), lengthMm: leg.lengthMm }));
+      members.push(...between, legs[k]);
+      j = k + 1;
+    }
+    const last = members[members.length - 1];
+    runs.push({
+      runId: `${first.legId}:run`,
+      routeId: first.routeId,
+      legIds: members.map((leg) => leg.legId),
+      startMm: first.startMm,
+      endMm: last.endMm,
+      lengthMm: last.endMm - first.startMm,
+      axis: first.axis,
+      orientation: first.orientation,
+      offsets,
+    });
+    i = j;
+  }
+  return runs;
+}
+
+function directionCos(leg, reference) { return dot(unit(sub(leg.endPointMm, leg.startPointMm)), unit(sub(reference.endPointMm, reference.startPointMm))); }
+function sameWay(leg, reference) { return directionCos(leg, reference) >= SAME_WAY_COS; }
+// Angle of a piece to the run. An elbow's chord sits at half its turn, so a
+// bend counts at twice its chord angle (a pair of 45 degree elbows is 45).
+function offsetAngleDeg(leg, reference) {
+  const chordDeg = (Math.acos(Math.max(-1, Math.min(1, directionCos(leg, reference)))) * 180) / Math.PI;
+  return leg.kind === 'BEND' ? 2 * chordDeg : chordDeg;
+}
+function round(value, step) { return Math.round(value / step) / Math.round(1 / step); }
 
 function routeLegs(route, edgeById, toleranceMm) {
   const pieces = (route.entityChainages || [])

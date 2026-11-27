@@ -3,6 +3,8 @@ import { freezeDeep } from '../dataset-utils.js';
 // Guide and line stop work, step 4, friction part (docs/guide-line-stop-load-plan.md).
 // Label ACCURATE: it follows the vertical result (Option B) and mu.
 //
+// "Leg" below means the straight run the stop sits on: one straight leg, or
+// legs joined through shallow offsets (route-legs.js, axialRuns).
 // A line stop is the fixed point of the straight leg it sits on. On each
 // side, the leg slides away from the stop and friction at the sliding
 // supports pulls back towards it. Each side is the stop's held length: from
@@ -31,13 +33,18 @@ export function buildSupportLineStopLoads({ restraintTable, frictionLoads, route
     schema: SUPPORT_LINE_STOP_LOADS_SCHEMA,
     loadCaseId: frictionLoads?.loadCaseId ?? null,
     label: 'ACCURATE',
-    basis: 'Friction part only: sum of axial mu x N_OPE on each side of the stop, along its straight leg, up to the leg end or the next axial stop. Design = larger side. Push from adjacent legs (thermal, SCREENING) is not included.',
+    basis: `Friction part only: sum of axial mu x N_OPE on each side of the stop, along its straight run, up to the run end or the next axial stop. Design = larger side. Push from adjacent legs (thermal, SCREENING) is not included. ${routeLegs.offsetRule || ''}`.trim(),
   };
   if (frictionLoads?.status !== 'CALCULATED' || routeLegs.status !== 'READY') {
     return freezeDeep({ ...base, status: frictionLoads?.status !== 'CALCULATED' ? 'NO_FRICTION_RESULT' : 'NO_LEGS', rows: [] });
   }
+  // A run is one straight leg, or legs joined through shallow offsets.
+  const legById = new Map(routeLegs.legs.map((leg) => [leg.legId, leg]));
+  const runs = routeLegs.axialRuns
+    || routeLegs.legs.filter((leg) => leg.kind === 'STRAIGHT').map((leg) => ({ ...leg, runId: leg.legId, legIds: [leg.legId], offsets: [] }));
   const legByEntity = new Map();
-  routeLegs.legs.forEach((leg) => leg.entityIds.forEach((id) => legByEntity.set(`${leg.routeId}|${id}`, leg)));
+  runs.forEach((run) => run.legIds.forEach((legId) => legById.get(legId)?.entityIds
+    .forEach((id) => legByEntity.set(`${run.routeId}|${id}`, { ...run, legId: run.runId }))));
   const frictionBySite = new Map(frictionLoads.rows.map((row) => [row.siteId, row]));
   const legOf = (site) => (site.pipe ? legByEntity.get(`${site.pipe.routeId}|${site.pipe.entityId}`) || null : null);
 
@@ -70,7 +77,7 @@ export function buildSupportLineStopLoads({ restraintTable, frictionLoads, route
       ...common,
       status: blocked ? blocked.status : 'CALCULATED',
       legId: leg.legId,
-      leg: { startMm: leg.startMm, endMm: leg.endMm, lengthMm: leg.lengthMm, axis: leg.axis, orientation: leg.orientation },
+      leg: { startMm: leg.startMm, endMm: leg.endMm, lengthMm: leg.lengthMm, axis: leg.axis, orientation: leg.orientation, legIds: leg.legIds, offsets: leg.offsets },
       sides,
       designAxialN: blocked ? null : Math.max(...values),
       netAxialN: blocked ? null : Math.abs(values[0] - values[1]),

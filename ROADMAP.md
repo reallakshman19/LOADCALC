@@ -227,7 +227,7 @@ Movement-based friction (zero where the pipe does not move) is reported as 0 whi
 
 | Line stop | Type | Leg (mm) | Start side (N) | End side (N) | Design axial (N) |
 | --- | --- | ---: | ---: | ---: | ---: |
-| PS-12248 | R+G+LS | 9,880 | 4,494 (3 rests) | 0 | 4,494 |
+| PS-12248 | R+G+LS | 15,732 (through two 15.8° steps) | 4,494 (3 rests) | 2,197 (PS-12250; PS-12249 lifted off) | 4,494 |
 | PS-12060 | R+G+LS | 5,497 | 2,470 | 0 | 2,470 |
 | PS-12240 | R+LS | 13,792 | 1,397 (incl. guide PS-12242) | 565 | 1,397 |
 | PS-12034 (8″ S8810103) | R+LS | 5,573 | 1,271 | 0 | 1,271 |
@@ -241,7 +241,11 @@ Movement-based friction (zero where the pipe does not move) is reported as 0 whi
 
 Hand checks: PS-12248 (8,772 + 2,453 + 3,756) × 0.3 = 4,494 N; PS-12240 (2,503 + 2,154) × 0.3 = 1,397 N and 1,883 × 0.3 = 565 N.
 
-Open point: on S8811951/B2, PS-12248's leg ends at a 16° sloped offset (146 mm long). The leg past it (PS-12249 lifted off, PS-12250) is not counted. A shallow offset passes most axial load in practice; counting through it needs an owner decision.
+**Shallow offsets (owner decision 2026-11-27):** a sloped offset of at most `topology.legOffsetMaxAngleDeg` = 30° between two legs running the same way counts as straight pipe for line stop loads.
+- `route-legs.js` gives these as `axialRuns`. An elbow counts at its turn angle (twice its chord), so a pair of 45° elbows is a 45° step and is not joined. An unset or unapproved angle joins nothing.
+- 1885S: only S8811951/B2 joins, through its two 15.8°, 146 mm steps (a 40 mm drop). The step moves about 0.0002 mm under the 2,197 N it carries.
+- Result: PS-12248's design load is unchanged at 4,494 N; its net value goes from 4,494 N to 2,297 N.
+- Why it matters for thermal: stopping at the step would miss 84 % of the growth toward the far elbow (1,081 mm instead of 6,933 mm of pipe).
 
 #### First benchmark results review (2026-11-26)
 

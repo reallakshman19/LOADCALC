@@ -24,6 +24,9 @@ export const PROJECT_DATA_GROUPS = Object.freeze([
     // { "<support tag>": "REST" | "GUIDE" | "LINESTOP" | "NONE" }; used only where
     // the source SUPPORT_TYPE is blank. NONE records "not a support" explicitly.
     field('supportTypeOverridesByTag', 'Support type for blank-type supports, by tag', 'json', 'Restraint table'),
+    // A sloped offset at or below this angle between two legs running the same
+    // way is counted as straight pipe for line stop loads. Unset: never.
+    field('legOffsetMaxAngleDeg', 'Shallow offset counted as straight (line stops)', 'number', 'degrees'),
     field('pipingClassMappings', 'Approved piping-class mappings', 'json', 'Master matching'),
   ]),
   group('editing', 'Editing', [

@@ -9,9 +9,13 @@ import { buildSupportLineStopLoads } from '../src/workspace/support-sites/suppor
 
 // Guide / line stop plan, step 2 (legs) and step 4 friction part.
 
-function profile(toleranceMm = 1) {
+function profile(toleranceMm = 1, offsetMaxAngleDeg = null, approved = true) {
   const pol = { source: 'FIXTURE_POLICY', authority: 'PROJECT_POLICY' };
-  return replaceProjectDataValue(createEmptyProjectDataProfile(), 'topology.portMatchToleranceMm', toleranceMm, pol, true);
+  let value = replaceProjectDataValue(createEmptyProjectDataProfile(), 'topology.portMatchToleranceMm', toleranceMm, pol, true);
+  if (offsetMaxAngleDeg !== null) {
+    value = replaceProjectDataValue(value, 'topology.legOffsetMaxAngleDeg', offsetMaxAngleDeg, pol, approved);
+  }
+  return value;
 }
 
 // Builds a route from pieces given in route order; `reversed` pieces are
@@ -58,6 +62,66 @@ test('legs run through in-line items and end at elbows and sloped offsets', () =
 
   const strict = buildRouteLegs({ routePartitionModel: model, profile: profile(0.1) });
   assert.deepEqual(strict.legs[0].entityIds, ['P1', 'FLAN'], 'a 0.4 mm offset breaks the leg at a 0.1 mm tolerance');
+});
+
+// Like S8811951/B2 past PS-12248: a 40 mm step down through a 146 mm piece
+// sloped about 16 degrees, a straight run, the step back up, then an elbow.
+const steppedRoute = () => routeModel([
+  { id: 'A', from: p(0, 0, 0), to: p(5000, 0, 0) },
+  { id: 'OFF1', from: p(5000, 0, 0), to: p(5140.4, 0, -40) },
+  { id: 'B', from: p(5140.4, 0, -40), to: p(10000, 0, -40) },
+  { id: 'OFF2', from: p(10000, 0, -40), to: p(10140.4, 0, 0) },
+  { id: 'C', from: p(10140.4, 0, 0), to: p(10300, 0, 0) },
+  { id: 'E1', type: 'ELBO', from: p(10300, 0, 0), to: p(10600, 300, 0) },
+  { id: 'D', from: p(10600, 300, 0), to: p(10600, 3000, 0) },
+]);
+
+test('legs running the same way join through shallow offsets only when an approved angle allows it', () => {
+  const joined = buildRouteLegs({ routePartitionModel: steppedRoute(), profile: profile(1, 30) });
+  assert.equal(joined.offsetMaxAngleDeg, 30);
+  assert.deepEqual(joined.axialRuns.map((run) => run.legIds.length), [5, 1]);
+  assert.deepEqual(joined.axialRuns[0].offsets.map((o) => o.angleDeg), [15.9, 15.9]); // atan(40 / 140.4)
+  // 5,000 + 146.0 + 4,859.6 + 146.0 + 159.6 mm along the pipe
+  assert.ok(Math.abs(joined.axialRuns[0].lengthMm - 10311.2) < 0.1);
+
+  const plain = (p2) => buildRouteLegs({ routePartitionModel: steppedRoute(), profile: p2 }).axialRuns.map((run) => run.legIds.length);
+  assert.deepEqual(plain(profile(1)), [1, 1, 1, 1, 1, 1], 'not set: every straight leg is its own run');
+  assert.deepEqual(plain(profile(1, 30, false)), [1, 1, 1, 1, 1, 1], 'not approved: not used');
+  assert.deepEqual(plain(profile(1, 10)), [1, 1, 1, 1, 1, 1], '16 degrees is above a 10 degree limit');
+});
+
+test('a pair of 45 degree elbows is a 45 degree offset, not 22.5', () => {
+  // Each elbow's chord sits at 22.5 degrees; the step itself turns 45.
+  const model = routeModel([
+    { id: 'A', from: p(0, 0, 0), to: p(5000, 0, 0) },
+    { id: 'E1', type: 'ELBO', from: p(5000, 0, 0), to: p(5100, 0, -41.42) },
+    { id: 'E2', type: 'ELBO', from: p(5100, 0, -41.42), to: p(5200, 0, -82.84) },
+    { id: 'B', from: p(5200, 0, -82.84), to: p(9000, 0, -82.84) },
+  ]);
+  const runs = buildRouteLegs({ routePartitionModel: model, profile: profile(1, 30) }).axialRuns;
+  assert.deepEqual(runs.map((run) => run.legIds.length), [1, 1]);
+});
+
+test('PS-12248 hand check: friction past a 16 degree step reaches the stop', () => {
+  // OPE loads from the 2026-11-27 Run, mu 0.3. Start side: 8,772 + 2,453 + 3,756 N
+  // (one value here). End side, past the step: PS-12250 7,324 N; PS-12249 lifted off.
+  const routeLegs = buildRouteLegs({ routePartitionModel: steppedRoute(), profile: profile(1, 30) });
+  const at = (siteId, code, entityId, chainageMm) => site(siteId, code, chainageMm, { entityId });
+  const restraintTable = { rows: [
+    at('START3', 'R', 'A', 1500), at('PS-12248', 'R+G+LS', 'A', 4000),
+    at('PS-12249', 'R', 'B', 6200), at('PS-12250', 'R', 'B', 9000), at('PAST_ELBOW', 'R', 'D', 12000),
+  ] };
+  const frictionLoads = friction([['START3', 4494.3], ['PS-12248', 0], ['PS-12249', 0], ['PS-12250', 2197.2], ['PAST_ELBOW', 999]]);
+  const stop = buildSupportLineStopLoads({ restraintTable, frictionLoads, routeLegs }).rows[0];
+  const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
+  close(stop.sides[0].frictionN, 4494.3);
+  close(stop.sides[1].frictionN, 2197.2);
+  close(stop.designAxialN, 4494.3); // unchanged by the step
+  close(stop.netAxialN, 2297.1); // was 4,494.3 when the step ended the leg
+  assert.equal(stop.leg.offsets.length, 2);
+
+  const strict = buildSupportLineStopLoads({ restraintTable, frictionLoads, routeLegs: buildRouteLegs({ routePartitionModel: steppedRoute(), profile: profile(1) }) }).rows[0];
+  assert.equal(strict.sides[1].frictionN, 0, 'without the rule the step ends the leg');
 });
 
 // One leg along X from 0 to 10,000 mm, an elbow, then a leg along Y.
