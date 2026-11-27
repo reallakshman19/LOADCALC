@@ -22,6 +22,7 @@ import { projectDataValue } from './project-data/project-data-contract.js';
  *   wall thickness<- the Piping Class master, via the existing scored resolver
  *   outer diameter<- the standard DN table below
  *   material density <- Project Data materialDensitiesKgPerM3
+ *   operating fluid density, insulation thickness <- the Line List row
  *
  * Everything produced is a PROPOSAL requiring explicit acceptance. Nothing is
  * written to enrichment authority here, and no value is accepted on the
@@ -173,6 +174,15 @@ export function buildLoadCalcMasterEnrichmentProposals({ dataset, masters, proje
         masters,
       ));
     }
+    // Insulation thickness from the Line List row (e.g. "Insulation Thickness
+    // [mm]"), proposed like the fluid density. A blank or zero thickness is not
+    // proposed, so the approved Project Data configured default still applies
+    // there. Insulation density is not proposed: the Project Data configured
+    // default for a positive thickness supplies it.
+    const insulationThicknessMm = finite(lineRow.insThk);
+    if (insulationThicknessMm !== null) {
+      proposals.push(proposalFor('INSULATION_THICKNESS', insulationThicknessMm, 'mm', context, masters));
+    }
     if (match.needsReview) {
       reviewRequired.push({
         targetId,
@@ -227,16 +237,19 @@ function proposalFor(fieldId, value, unit, context, masters) {
       },
     });
   }
-  // Fluid density comes from the Line List, every other field from the Piping
-  // Class master. Attributing all of them to one master would misstate which
-  // approved source a value can be traced back to.
-  const fromLineList = fieldId === 'OPERATING_FLUID_DENSITY';
+  // Fluid density and insulation thickness come from the Line List, every
+  // other field from the Piping Class master. Attributing all of them to one
+  // master would misstate which approved source a value can be traced back to.
+  const fromLineList = fieldId === 'OPERATING_FLUID_DENSITY' || fieldId === 'INSULATION_THICKNESS';
   const master = fromLineList ? masters?.lineList : masters?.pipingClass;
   const approximate = !fromLineList && Boolean(match.needsReview);
+  const lineListRationale = fieldId === 'INSULATION_THICKNESS'
+    ? `Insulation thickness for line ${lineRow.lineKey} from the Line List.`
+    : `Operating fluid density for line ${lineRow.lineKey} from the Line List (${fluidDensitySource}).`;
   return createNonFeaEnrichmentProposal({
     proposalId: `loadcalc-master:${fieldId}:${targetId}`,
     rationale: fromLineList
-      ? `Operating fluid density for line ${lineRow.lineKey} from the Line List (${fluidDensitySource}).`
+      ? lineListRationale
       : approximate
         ? `Approved master value for ${fieldId} at DN${boreMm}. Piping class ${requestedClass} resolved approximately to ${match.resolvedPipingClass} (${match.method}, confidence ${round(match.confidence)}); confirm the class is correct before accepting.`
         : `Approved master value for ${fieldId} at DN${boreMm} from piping class ${match.resolvedPipingClass}.`,
@@ -254,7 +267,7 @@ function proposalFor(fieldId, value, unit, context, masters) {
         matchMode: 'EXACT',
         boreMm,
         lineKey: lineRow.lineKey,
-        fluidDensitySource,
+        ...(fieldId === 'OPERATING_FLUID_DENSITY' ? { fluidDensitySource } : { lineListField: 'insThk' }),
         lineListSourceHash: masters?.lineList?.sourceHash || null,
       } : {
         matchMode: approximate ? 'APPROXIMATE_CLASS_MATCH' : 'EXACT',

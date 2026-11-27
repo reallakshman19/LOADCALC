@@ -116,7 +116,7 @@
             "fieldId": "INSULATION_THICKNESS",
             "value": 0,
             "unit": "mm",
-            "basis": "SAMPLE ASSUMPTION — not project data. No insulation thickness source exists for the 1885S sample (lines carry spec /FP-HOT but no thickness); 0 mm owner-approved 2026-11-26 so the benchmark can run. Loads exclude insulation weight.",
+            "basis": "SAMPLE ASSUMPTION — not project data. No insulation thickness source exists for the 1885S sample (lines carry spec /FP-HOT but no thickness); 0 mm owner-approved 2026-11-26 so the benchmark can run. Since 2026-11-27 (owner decision) a line whose Line List row gives a thickness uses that value (proposed from the Line List master); this 0 mm applies only where the Line List gives none.",
             "allowedMethods": ["WEIGHT_AND_GRAVITY", "SUSTAINED_REACTIONS", "SUSTAINED_MEMBER_ACTIONS", "SUSTAINED_STRESS", "RESTRAINT_REACTIONS", "VERTICAL_CONTACT", "COMBINED_OPERATING_REACTION", "ENRICHED_STAGED_JSON_EXPORT"]
           }
         ]

@@ -24,9 +24,10 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 | 2026-11-26 | **Accuracy target 90 %:** each support's vertical load within about 10 % of a stiffness-based reference. |
 | 2026-11-26 | **No beam solver / FE.** A whole-system stiffness solve is LFEA scope. Improve the *empirical* calculation instead. |
 | 2026-11-26 | **Support types:** PS-12297 = REST; 5 bare ATTA / PENE floor-opening points = NONE (not supports); PS-12248 is one R+G+LS support (grouping tolerance 1 mm). In `project-data/1885s-project-data-profile.json`. |
+| 2026-11-27 | **Real Line List is the source** for 1885S, keyed Service + Line number: operating temperature (T2) for the thermal checks, fluid density, and **insulation thickness** (now proposed from the Line List; the 0 mm and 1,000 kg/m³ sample fallbacks apply only where it gives no value). Shallow offsets of 30° or less count as straight for line stops (`topology.legOffsetMaxAngleDeg`). |
 | 2026-11-26 | **Option B approved as empirical** (three-moment hand calc with lift-off). Wired into the Run as `CONTINUOUS_SPAN_THREE_MOMENT_V1`, the AUTO default; V2 stays selectable. Weight and friction results are labelled ACCURATE; guide / line stop thermal results are SCREENING bounds only. |
 
-**Never commit** client documents. The client Line List `.xlsx` lives outside the repo; only the derived sample CSV is committed. Never commit secrets either. Keep the owner's personal details out of commits and external requests.
+**Never commit** client documents. The client Line List `.xlsx` is used locally from `public/fixtures/` (excluded in `.git/info/exclude`, never committed); only the derived sample CSV is committed. Never commit secrets either. Keep the owner's personal details out of commits and external requests.
 
 ## 3. How to run
 

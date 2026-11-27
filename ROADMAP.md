@@ -312,6 +312,27 @@ Browser Run with the real Line List in place of the sample CSV (2026-11-27):
 
 Hand check: PS-12268, Δ = 1.17×10⁻⁵ × 288 × 2,263 = 7.63 mm; lower = 745 N × 2.88 = 2,145 N.
 
+#### Insulation from the Line List (owner decision 2026-11-27)
+
+- `load-calc-master-candidates.js` now also proposes **INSULATION_THICKNESS** from the Line List row (`insThk`), as EXACT_APPROVED_MASTER from the Line List, like the operating fluid density.
+- A blank or zero thickness is not proposed, so the 0 mm configured default (SAMPLE ASSUMPTION) applies only where the Line List gives no thickness.
+- Insulation density stays the owner-approved 210 kg/m³ configured default.
+- Test: `tests/load-calc-master-candidates.test.mjs`.
+
+Hand check, kg/m at 210 kg/m³:
+- 6″ / 80 mm: π/4 (328.3² − 168.3²) = 0.0624 m², 13.1 kg/m
+- 8″ / 100 mm: 21.1 kg/m
+- 10″ / 120 mm: 31.1 kg/m
+
+The pipes the Run counts add 1,407 kg = **13.80 kN**, exactly the EMPTY increase. Three duplicate AUTO carrier pieces (18 kg) are correctly not counted.
+
+**1885S, browser Run with the real Line List (2026-11-27):**
+- EMPTY / OPE / HYD: **101.4 / 102.5 / 117.8 kN** (was 87.6 / 100.4 / 104.0 with the sample CSV). Equilibrium PASSED, coverage 100 %, same exceptions (37 overhang, 2 branch transfers, 1 lift-off).
+- Design friction: 24,565 N over 25 sliding supports.
+- Line stop design axial (friction part): PS-12248 4,690 N; PS-12060 2,405; PS-12240 1,374; PS-12034 (8″) 1,236; PS-12169 996; PS-12034 (6″) 726; PS-12295 667; PS-12231 545; PS-12268 340; PS-12243 and PS-12166 0.
+- Guides: unchanged (they depend on temperature and stiffness, not weight). PS-12268 2,144–8,578 N; PS-12242 496–1,984 N; PS-12248 3–153 N.
+- Sample assumptions left: the 5 placeholder fitting weights. The 1,000 kg/m³ fluid fallback and the 0 mm insulation no longer apply to any 1885S line.
+
 **Open: α at temperature.** Project Data's α = 1.17×10⁻⁵ /°C is labelled "at 21 °C". The mean coefficient from 21 °C to 309 °C for carbon steel is higher (to be confirmed from ASME B31.3 Appendix C). Growth, and so the guide bounds, scale with it.
 
 #### First benchmark results review (2026-11-26)
