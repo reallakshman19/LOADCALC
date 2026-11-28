@@ -3,6 +3,8 @@
 // agent JS tools time out at about 45 s, and step 1 reloads the page.
 // Start the dev server first: npm run dev  (http://localhost:5173).
 // Steps 1-6 were used on 2026-11-26 to get the results recorded in ROADMAP.md.
+// The same steps run without a browser in tests/e2e/headless-1885s-run.mjs
+// (npm run test:e2e); use this file to check the screens themselves.
 
 // ---- Step 1: clean state (clears localStorage and the master-data IndexedDB, then reloads)
 localStorage.clear(); await new Promise((r) => { const q = indexedDB.deleteDatabase('MasterDataDB'); q.onsuccess = q.onerror = q.onblocked = () => r(); }); location.reload(); 'ok';

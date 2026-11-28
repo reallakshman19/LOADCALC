@@ -11,6 +11,7 @@
     "test": "node scripts/run-tests.mjs",
     "test:unit": "node scripts/run-tests.mjs --only-tests",
     "test:checks": "node scripts/run-tests.mjs --only-checks",
+    "test:e2e": "node scripts/run-tests.mjs --only-tests e2e-1885s",
     "lint": "eslint ."
   },
   "dependencies": {
