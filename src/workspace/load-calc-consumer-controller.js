@@ -36,12 +36,7 @@ import {
 } from './topology-edit/topology-edit-gap-autofix-policy.js';
 import { SUPPORT_RESTRAINT_EVENTS } from './support-restraint-events.js';
 import { buildSupportRestraintTable } from './support-sites/support-restraint-table.js';
-import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
-import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
-import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lateral-loads.js';
-import { buildSupportLineStopThermal } from './support-sites/support-line-stop-thermal.js';
-import { withLineListOperatingTemperatures } from './support-sites/line-list-temperatures.js';
-import { lineExpansionCoefficients } from './support-sites/thermal-expansion-table.js';
+import { buildHorizontalLoadResults } from './support-sites/horizontal-load-results.js';
 import { projectDataEntry, projectDataValue } from './project-data/project-data-contract.js';
 import { SUPPORT_TYPE_OVERRIDE_PATH } from './support-sites/support-site-model.js';
 import {
@@ -49,7 +44,6 @@ import {
   renderSupportRestraintReview,
   restraintReviewRows,
 } from './support-sites/support-restraint-review-view.js';
-import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
 const EMPIRICAL_SCENARIO_VIEW_TABS = new Set([
@@ -873,91 +867,18 @@ export class LoadCalcConsumerController {
   }
 }
 
-// Design friction (guide / line stop plan, step 3), line stop axial
-// friction (step 4) and guide lateral bounds (step 7) for the Results page. An extra view on the vertical Run:
-// a failure here hides those columns and never blocks the Results page.
-function currentFrictionLoads(distribution) {
-  if (!distribution?.loadCases?.length) return null;
-  let friction = null;
-  try {
-    const profile = projectDataStore.getProfile();
-    const routePartitionModel = engineeringModelStore.getRoutePartitionModel();
-    const restraintTable = buildSupportRestraintTable({
-      supportSiteModel: engineeringModelStore.getSupportSiteModel(),
-      routePartitionModel,
-      profile,
-    });
-    // Thermal checks use the Line List's operating temperature per line where
-    // Project Data does not set that line itself (a view; Project Data unchanged).
-    const lineRows = masterDataController.getMasterData()?.lineList?.normalizedRows || [];
-    const modelLines = [...new Set((routePartitionModel?.routes || []).map((route) => route.lineKey).filter(Boolean))];
-    const thermal = withLineListOperatingTemperatures(profile, lineRows, modelLines);
-    // Expansion coefficient per line from the approved table (material from
-    // the Line List, at the line's operating temperature).
-    const operatingC = projectDataValue(thermal.profile, 'thermoMechanicalBasis.operatingTemperaturesC') || {};
-    const expansion = lineExpansionCoefficients({
-      profile,
-      materialByLine: Object.fromEntries(lineRows
-        .filter((row) => modelLines.includes(String(row.lineKey)) && String(row.material || '').trim())
-        .map((row) => [String(row.lineKey), String(row.material).trim()])),
-      temperatureByLine: Object.fromEntries(modelLines
-        .map((lineKey) => [lineKey, Number.isFinite(operatingC[lineKey]) ? operatingC[lineKey] : operatingC.DEFAULT])
-        .filter(([, value]) => Number.isFinite(value))),
-    });
-    friction = buildSupportFrictionLoads({ restraintTable, distribution, profile: thermal.profile });
-    const routeLegs = buildRouteLegs({ routePartitionModel, profile });
-    const lineStops = buildSupportLineStopLoads({ restraintTable, frictionLoads: friction, routeLegs });
-    let guides = null;
-    try {
-      guides = buildSupportGuideLateralLoads({
-        restraintTable, routeLegs, distribution, profile: thermal.profile,
-        pipeSections: currentPipeSections(routePartitionModel),
-        expansionByLine: expansion.byLine,
-      });
-    } catch (error) {
-      console.warn('Guide lateral loads not shown:', error);
-    }
-    let lineStopThermal = null;
-    try {
-      lineStopThermal = buildSupportLineStopThermal({
-        lineStops, restraintTable, routeLegs, frictionLoads: friction, profile: thermal.profile, distribution,
-        pipeSections: currentPipeSections(routePartitionModel),
-        expansionByLine: expansion.byLine,
-      });
-    } catch (error) {
-      console.warn('Line stop thermal push not shown:', error);
-    }
-    const temperatureSource = {
-      source: thermal.source,
-      appliedByLine: thermal.applied,
-      conflicts: thermal.conflicts,
-      expansion: { status: expansion.status, lines: expansion.lines },
-    };
-    return Object.freeze({ ...friction, lineStops, lineStopThermal, guides, temperatureSource });
-  } catch (error) {
-    console.warn('Friction or line stop loads not shown:', error);
-    return friction;
-  }
-}
-
-// Pipe OD and wall per pipe entity, as the sealed common input carries them
-// (master data), for the guide bending check. Read-only.
-function currentPipeSections(routePartitionModel) {
-  const snapshot = nonFeaCommonInputStore.getSnapshot();
-  const components = snapshot?.commonInput?.enrichedModel?.components
-    || snapshot?.request?.enrichedProjection?.enrichedModel?.components
-    || [];
-  const entityBySource = new Map((routePartitionModel?.edges || [])
-    .filter((edge) => edge.source?.sourceEntityId)
-    .map((edge) => [String(edge.source.sourceEntityId), edge.entityId]));
-  return components
-    .filter((component) => component.type === 'PIPE')
-    .map((component) => ({
-      entityId: entityBySource.get(String(component.sourceEntityId)),
-      outsideDiameterMm: component.engineeringProperties?.outerDiameterMm?.value,
-      wallThicknessMm: component.engineeringProperties?.wallThicknessMm?.value,
-    }))
-    .filter((row) => row.entityId);
+// Friction, line stop and guide loads for the Results page, from the current
+// stores. An extra view on the vertical Run: a failure here hides those
+// columns and never blocks the Results page. Exported for the end-to-end suite.
+export function currentFrictionLoads(distribution) {
+  return buildHorizontalLoadResults({
+    distribution,
+    profile: projectDataStore.getProfile(),
+    supportSiteModel: engineeringModelStore.getSupportSiteModel(),
+    routePartitionModel: engineeringModelStore.getRoutePartitionModel(),
+    lineRows: masterDataController.getMasterData()?.lineList?.normalizedRows || [],
+    commonInputSnapshot: nonFeaCommonInputStore.getSnapshot(),
+  });
 }
 
 /**
