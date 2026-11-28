@@ -50,7 +50,21 @@ export function evaluateCurrentNonFeaCommonInput() {
   }
 }
 
+/**
+ * The Project Data and Calculation Defaults screens write the built-in product
+ * defaults into Project Data the first time they open. Any Project Data change
+ * after a seal marks it stale, so a Run made before those screens were opened
+ * turned HISTORICAL as soon as one was opened. Writing the defaults here, before
+ * every seal, means the later screen write finds nothing to fill and changes
+ * nothing. Only empty fields are filled, and the checker already reads the
+ * profile with them filled (effectiveProfile), so no input value changes.
+ */
+function applyProductDefaultsBeforeSeal() {
+  projectDataStore.applyProductDefaults();
+}
+
 export function sealCurrentNonFeaCommonInput(confirmation) {
+  applyProductDefaultsBeforeSeal();
   evaluateCurrentNonFeaCommonInput();
   if (nonFeaCommonInputStore.getSnapshot().error) {
     throw codedError(nonFeaCommonInputStore.getSnapshot().error, 'COMMON_INPUT_EVALUATION_FAILED');
@@ -134,6 +148,9 @@ export function isCurrentReadyNonFeaCalculationSnapshot(snapshot) {
  * An already-current fully READY sealed Common Input is reused rather than resealed.
  */
 export function sealCurrentReadyNonFeaCalculationSnapshot({ capturedAt = new Date().toISOString() } = {}) {
+  // First, so a seal made before the defaults were written is marked stale now
+  // (by the Project Data listener) and resealed below, not reused.
+  applyProductDefaultsBeforeSeal();
   const before = nonFeaCommonInputStore.getSnapshot();
   if (isCurrentReadyNonFeaCalculationSnapshot(before)) {
     assertCommonInputMethodPartition(before.commonInput);

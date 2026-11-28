@@ -51,6 +51,11 @@ test('1885S sample: Results pane shows the current values and labels', () => {
   assert.ok(ope.includes('expansion table not filled / not approved yet'));
 });
 
+test('1885S sample: opening Calculation Defaults after the Run keeps the Run current', () => {
+  // The seal wrote the product defaults first, so the screen finds nothing to fill.
+  assert.deepEqual(result.afterScreensOpen, { screenWroteDefaults: false, commonInputStale: false, paneUnchanged: true });
+});
+
 test('1885S sample: Results page names every SAMPLE ASSUMPTION input', () => {
   assert.deepEqual(result.sampleAssumptions, SAMPLE_ASSUMPTION_NOTICE);
 });

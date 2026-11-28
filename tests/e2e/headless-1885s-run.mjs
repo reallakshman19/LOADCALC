@@ -127,16 +127,30 @@ async function run(lineListPath, warnings) {
   });
 
   // Results pane, with the arguments the Load Calc controller passes.
-  const pane = { innerHTML: '' };
-  renderEngineeringLoadPane(
-    pane, distribution, supportSiteModel, routePartitionModel,
-    engineeringModelStore.getAuthorizedExecution(), null,
-    engineeringModelStore.getCurrentCommonInputExecution(), horizontal,
-  );
+  const renderPane = () => {
+    const pane = { innerHTML: '' };
+    renderEngineeringLoadPane(
+      pane, engineeringModelStore.getDistribution(), supportSiteModel, routePartitionModel,
+      engineeringModelStore.getAuthorizedExecution(), null,
+      engineeringModelStore.getCurrentCommonInputExecution(), horizontal,
+    );
+    return pane.innerHTML;
+  };
+  const paneHtml = renderPane();
+
+  // Opening the Project Data or Calculation Defaults screen after the Run: both
+  // write the product defaults on first open. The Run must stay current.
+  const { nonFeaCommonInputStore } = await import('../../src/workspace/non-fea-common-input-store.js');
+  const screenWrite = projectDataStore.applyProductDefaults();
+  const afterScreensOpen = {
+    screenWroteDefaults: screenWrite !== null,
+    commonInputStale: nonFeaCommonInputStore.getSnapshot().staleness?.stale ?? null,
+    paneUnchanged: renderPane() === paneHtml,
+  };
 
   return {
     dataset, profile, lineRows, distribution, runtime, horizontal, restraintTable,
-    supportSiteModel, routePartitionModel, paneHtml: pane.innerHTML, warnings, sampleAssumptions,
+    supportSiteModel, routePartitionModel, paneHtml, warnings, sampleAssumptions, afterScreensOpen,
     inputs: {
       proposals: loaded.proposals,
       fittingClearWinners: loaded.fittingClearWinners,
