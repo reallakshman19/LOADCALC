@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hasRealLineList, REAL_LINE_LIST, runHeadless1885S, caseOf } from './e2e/headless-1885s-run.mjs';
-import { REAL_EXPECTED, SAMPLE_EXPECTED } from './e2e/expected-1885s.mjs';
+import { REAL_EXPECTED, SAMPLE_ASSUMPTION_NOTICE, SAMPLE_EXPECTED } from './e2e/expected-1885s.mjs';
 import {
   checkFriction, checkGuides, checkInputs, checkLineStops, checkRestraintTable, checkResultsPane, checkVertical, near,
 } from './e2e/checks-1885s.mjs';
@@ -75,4 +75,11 @@ test('1885S real Line List: Results pane shows the current values and labels', {
   const ope = checkResultsPane(result);
   assert.ok(ope.includes('S8811951 309 °C (Line List)'));
   assert.match(ope, /FINDING: Leg to the line end/u);
+});
+
+test('1885S real Line List: Results page still names the SAMPLE ASSUMPTION inputs', { skip }, () => {
+  // The client Line List gives a density for every line, so the 1000 kg/m³
+  // fallback line drops out; the placeholder weights and the 0 mm insulation
+  // default (for lines without a thickness) are still named.
+  assert.deepEqual(result.sampleAssumptions, SAMPLE_ASSUMPTION_NOTICE.filter((item) => !item.startsWith('Operating fluid density')));
 });

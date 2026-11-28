@@ -37,6 +37,8 @@ import {
 import { SUPPORT_RESTRAINT_EVENTS } from './support-restraint-events.js';
 import { buildSupportRestraintTable } from './support-sites/support-restraint-table.js';
 import { buildHorizontalLoadResults } from './support-sites/horizontal-load-results.js';
+import { nonFeaEnrichmentStore } from './enrichment/non-fea-enrichment-store.js';
+import { sampleAssumptionItems, sampleAssumptionNoticeMarkup } from './sample-project/sample-assumption-notice.js';
 import { projectDataEntry, projectDataValue } from './project-data/project-data-contract.js';
 import { SUPPORT_TYPE_OVERRIDE_PATH } from './support-sites/support-site-model.js';
 import {
@@ -505,17 +507,25 @@ export class LoadCalcConsumerController {
     });
     this.rootElement.replaceChildren(view);
     const pane = view.querySelector('[data-load-calc-pane]');
-    if (this.activeTab === 'loads') renderEngineeringLoadPane(
-      pane,
-      engineeringModelStore.getDistribution(),
-      engineeringModelStore.getSupportSiteModel(),
-      engineeringModelStore.getRoutePartitionModel(),
-      engineeringModelStore.getAuthorizedExecution(),
-      authorizationState,
-      currentCommonInputExecution,
-      currentFrictionLoads(engineeringModelStore.getDistribution()),
-    );
-    else this.renderDeferredPane(this.activeTab, pane, revision);
+    if (this.activeTab === 'loads') {
+      renderEngineeringLoadPane(
+        pane,
+        engineeringModelStore.getDistribution(),
+        engineeringModelStore.getSupportSiteModel(),
+        engineeringModelStore.getRoutePartitionModel(),
+        engineeringModelStore.getAuthorizedExecution(),
+        authorizationState,
+        currentCommonInputExecution,
+        currentFrictionLoads(engineeringModelStore.getDistribution()),
+      );
+      // Owner rule: results that rest on sample assumptions say so on the page.
+      if (engineeringModelStore.getDistribution()) {
+        pane.insertAdjacentHTML('afterbegin', sampleAssumptionNoticeMarkup(sampleAssumptionItems({
+          acceptedRecords: nonFeaEnrichmentStore.getSnapshot().acceptedRecords,
+          profile: projectDataStore.getProfile(),
+        })));
+      }
+    } else this.renderDeferredPane(this.activeTab, pane, revision);
   }
 
   // Restraints review (guide / line stop step 1): the restraint table, with a

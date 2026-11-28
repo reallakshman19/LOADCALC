@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runHeadless1885S, SAMPLE_LINE_LIST } from './e2e/headless-1885s-run.mjs';
-import { SAMPLE_EXPECTED } from './e2e/expected-1885s.mjs';
+import { SAMPLE_ASSUMPTION_NOTICE, SAMPLE_EXPECTED } from './e2e/expected-1885s.mjs';
 import {
   checkFriction, checkGuides, checkInputs, checkLineStops, checkRestraintTable, checkResultsPane, checkVertical, near,
 } from './e2e/checks-1885s.mjs';
@@ -49,4 +49,8 @@ test('1885S sample: no line temperatures, so guides and thermal push are 0 (SCRE
 test('1885S sample: Results pane shows the current values and labels', () => {
   const ope = checkResultsPane(result);
   assert.ok(ope.includes('expansion table not filled / not approved yet'));
+});
+
+test('1885S sample: Results page names every SAMPLE ASSUMPTION input', () => {
+  assert.deepEqual(result.sampleAssumptions, SAMPLE_ASSUMPTION_NOTICE);
 });

@@ -3,7 +3,7 @@
 // that produced it, and compares.
 import assert from 'node:assert/strict';
 import { COMMON_EXPECTED } from './expected-1885s.mjs';
-import { caseOf, tagOf } from './headless-1885s-run.mjs';
+import { caseOf, SAMPLE_FITTING_WEIGHTS, tagOf } from './headless-1885s-run.mjs';
 
 const near = (actual, expected, tolerance, label) => {
   assert.ok(Number.isFinite(actual), `${label}: not a number (${actual})`);
@@ -21,6 +21,13 @@ export function checkInputs(result, proposals) {
   assert.equal(result.inputs.acceptedRecords,
     proposals + COMMON_EXPECTED.fittingClearWinners + COMMON_EXPECTED.sampleFittingWeights);
   assert.equal(result.inputs.pendingProposals, 0);
+  // The sample project reads its placeholders from
+  // public/master-data/sample-1885s-placeholder-weights.json: still the 5
+  // owner-approved SAMPLE ASSUMPTION weights.
+  assert.deepEqual(
+    result.inputs.sampleAssumptionWeights.map((row) => [row.entityId, row.weightKg]),
+    SAMPLE_FITTING_WEIGHTS.map(([entityId, kg]) => [entityId, kg]),
+  );
   assert.equal(result.runtime.selectedMethod, COMMON_EXPECTED.method);
   assert.deepEqual(result.warnings, [], 'no view part failed quietly');
 }

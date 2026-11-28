@@ -1,5 +1,5 @@
 /** Dataset file import and 3D Edit demo fixture loading for the Workspace tree. */
-import { EVENT_TOPICS } from './event-topics.js';
+import { APPLICATION_EVENTS, EVENT_TOPICS } from './event-topics.js';
 
 export const TOPOLOGY_EDIT_DEMO_FIXTURE_PATH = 'fixtures/topology-edit-20-element-demo.staged.json';
 export const TOPOLOGY_EDIT_XYZ_BRANCH_SCENARIO_ID = 'XYZ-10-COMPONENT-BRANCH';
@@ -289,6 +289,49 @@ export function ensureTopologyEditXyzBranchDemoButton(panel) {
     <path d="M4 18V6m0 6h7m0 0V5m0 7h7m-7 0v7m7-10 2 3-2 3" />
   </svg><span>XYZ Branch</span><span class="dataset-toolbar__demo-count">10+2</span>`;
   actions.append(button);
+  return button;
+}
+
+/**
+ * "Sample 1885S": loads the 1885S model, masters, sample Line List and
+ * fitting weights in one click, then opens Load Calc at the Run step.
+ */
+export async function loadSampleProjectFromToolbar(panel, options = {}) {
+  panel.sampleProjectButton.disabled = true;
+  panel.clearError();
+  try {
+    const { loadSampleProject, sampleProjectSummary } = await import('./sample-project/load-sample-project.js');
+    const result = await loadSampleProject({
+      eventBus: panel.eventBus,
+      fetchFn: options.fetchFn ?? browserFetch(panel),
+      onProgress: (text) => { panel.statusElement.textContent = text; },
+    });
+    panel.eventBus.publish(APPLICATION_EVENTS.CHANGE_REQUESTED, { viewId: 'LOAD_CALC', source: 'navigation' });
+    panel.eventBus.publish(EVENT_TOPICS.LOAD_CALC_SUBTAB_REQUESTED, {
+      tab: result.inputCheck === 'READY' ? 'verify' : 'preflight',
+    });
+    panel.statusElement.textContent = sampleProjectSummary(result);
+  } catch (error) {
+    publishLoadFailure(panel, 'Sample 1885S', error);
+  } finally {
+    panel.sampleProjectButton.disabled = false;
+  }
+}
+
+export function ensureSampleProjectButton(panel) {
+  const existing = panel.rootElement.querySelector('[data-action="load-sample-project"]');
+  if (existing) return existing;
+  const actions = panel.requireElement('.dataset-toolbar__actions');
+  const button = panel.rootElement.ownerDocument.createElement('button');
+  button.type = 'button';
+  button.className = 'dataset-toolbar__demo-button';
+  button.dataset.action = 'load-sample-project';
+  button.title = 'Load the 1885S sample project: model, masters, sample Line List and fitting weights (5 are SAMPLE ASSUMPTION placeholders). Then press Run.';
+  button.setAttribute('aria-label', 'Load the 1885S sample project');
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M4 7h16M4 12h10M4 17h7m8-3v6m-3-3h6" />
+  </svg><span>Sample 1885S</span>`;
+  actions.prepend(button);
   return button;
 }
 

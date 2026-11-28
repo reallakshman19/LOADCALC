@@ -1,8 +1,10 @@
 // End-to-end 1885S Load Calc Run in Node, no browser.
 //
 // Drives the app's own controllers and stores in the same order as the
-// browser benchmark (benchmarks/browser/1885s-run-steps.js):
-//   1. load benchmarks/Sjson.json (dataset, topology, supports, load path)
+// browser benchmark (benchmarks/browser/1885s-run-steps.js). Steps 1-5 are
+// the Workspace "Sample 1885S" button's own function
+// (src/workspace/sample-project/load-sample-project.js):
+//   1. load public/fixtures/Sjson.json (dataset, topology, supports, load path)
 //   2. bundled masters (piping class, weights, material map) auto-normalise
 //   3. upload a Line List into Master Data
 //   4. proposals from approved masters -> accept; clear-winner fitting weights -> accept
@@ -12,7 +14,6 @@
 //
 // The stores are app singletons, so call runHeadless1885S once per process
 // (the test runner gives every test file its own process).
-import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -34,7 +35,8 @@ function findClientLineList() {
 }
 
 // SAMPLE ASSUMPTION (owner-approved 2026-11-26): placeholder catalogue weights
-// for the 5 fittings with no master row. Same list as the browser benchmark.
+// for the 5 fittings with no master row. Same list as the browser benchmark;
+// the tests check the sample project's JSON file still holds exactly these.
 export const SAMPLE_FITTING_WEIGHTS = Object.freeze([
   ['=1006649732/51284', 408, 'Flanged Control Valve DN150 900# RF'],
   ['=1006649732/51463', 15, 'Weldneck Flange DN50 900#'],
@@ -61,7 +63,6 @@ export async function runHeadless1885S({ lineListPath = SAMPLE_LINE_LIST } = {})
 
 async function run(lineListPath, warnings) {
   const { EventBus } = await import('../../src/workspace/event-bus.js');
-  const { EVENT_TOPICS } = await import('../../src/workspace/event-topics.js');
   const { WorkspaceState } = await import('../../src/workspace/workspace-state.js');
   const { DatasetController } = await import('../../src/workspace/dataset-controller.js');
   const { EngineeringModelController, ENGINEERING_MODEL_EVENTS } = await import('../../src/workspace/engineering-model-controller.js');
@@ -76,14 +77,10 @@ async function run(lineListPath, warnings) {
   const { SupportLoadScreeningController } = await import('../../src/workspace/support-load-screening-controller.js');
   const { SupportLoadScreeningStore } = await import('../../src/workspace/support-load-screening-store.js');
   const { masterDataController } = await import('../../src/workspace/master-data-controller.js');
-  const masterUi = await import('../../src/workspace/master-data-ui.js');
-  const { parseMasterFile, autoMapMasterColumns } = await import('../../src/workspace/master-data-events-handler.js');
-  const { normalizeLineList } = await import('../../src/workspace/master-data-normalizers.js');
   const { projectDataStore } = await import('../../src/workspace/project-data/project-data-store.js');
+  const { loadSampleProject } = await import('../../src/workspace/sample-project/load-sample-project.js');
+  const { sampleAssumptionItems } = await import('../../src/workspace/sample-project/sample-assumption-notice.js');
   const { nonFeaEnrichmentStore } = await import('../../src/workspace/enrichment/non-fea-enrichment-store.js');
-  const { evaluateCurrentNonFeaCommonInput } = await import('../../src/workspace/non-fea-common-input-runtime.js');
-  const { buildLoadCalcMasterEnrichmentProposals } = await import('../../src/workspace/load-calc-master-candidates.js');
-  const { buildFittingWeightReviewRows, fittingWeightRecordFor } = await import('../../src/workspace/load-calc-fitting-weight-review.js');
   const { currentFrictionLoads } = await import('../../src/workspace/load-calc-consumer-controller.js');
   const { buildSupportRestraintTable } = await import('../../src/workspace/support-sites/support-restraint-table.js');
   const { renderEngineeringLoadPane } = await import('../../src/workspace/load-calc-current-system-view.js');
@@ -98,69 +95,18 @@ async function run(lineListPath, warnings) {
   new ModelLoadController(EventBus, ModelLoadStore, null).init();
   new SupportLoadScreeningController(EventBus, SupportLoadScreeningStore, null).init();
 
-  // 1. Dataset
-  const datasetBytes = new Uint8Array(readFileSync(ROOT + 'benchmarks/Sjson.json'));
-  EventBus.publish(EVENT_TOPICS.DATASET_LOAD_REQUESTED, {
-    rawPackage: JSON.parse(new TextDecoder().decode(datasetBytes)),
-    sourceName: 'Sjson.json',
-    sourceBytes: datasetBytes,
-    sourceSha256: createHash('sha256').update(datasetBytes).digest('hex'),
+  // 1-5. Model, masters, Line List, proposals and fitting weights: the same
+  // function as the Workspace "Sample 1885S" button. The sample Line List is
+  // fetched from public/ as the button does; another Line List is passed in.
+  const loaded = await loadSampleProject({
+    eventBus: EventBus,
+    baseUrl: '/',
+    lineList: lineListPath === SAMPLE_LINE_LIST ? null : {
+      bytes: new Uint8Array(readFileSync(ROOT + lineListPath)),
+      fileName: lineListPath.split('/').pop(),
+    },
   });
-  const dataset = WorkspaceState.getSnapshot().dataset;
-  if (!dataset) throw new Error('Sjson.json did not load.');
-
-  // 2. Bundled masters (the piping class master arrives through fetch).
-  await masterDataController.restorePromise;
-  for (let i = 0; i < 100 && !masterDataController.getMasterData().pipingClass.rawRows.length; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  masterUi.autoNormalizeBundledMasters();
-  await masterUi.autoGenerateMasterEnrichment();
-  await masterUi.autoBindMasterSources();
-  await masterUi.autoEnsureDefaultQualificationProfile();
-
-  // 3. Line List upload, as the Master Data file input does it.
-  const lineListName = lineListPath.split('/').pop();
-  const parsed = await parseMasterFile(new Blob([readFileSync(ROOT + lineListPath)]), lineListName, 'lineList');
-  const fieldMap = autoMapMasterColumns(parsed.rawRows, 'lineList') || {};
-  const lineRows = normalizeLineList(parsed.rawRows, fieldMap);
-  masterDataController.commitMasterImport('lineList', {
-    rawRows: parsed.rawRows, fieldMap, normalizedRows: lineRows, diagnostics: [],
-    fileName: lineListName, sheetName: parsed.sheetName, sourceMetadata: parsed.sourceMetadata,
-  });
-  await masterUi.autoBindMasterSources();
-
-  // 4. Proposals from approved masters, then clear-winner fitting weights.
-  const masters = masterDataController.getMasterData();
-  const generated = buildLoadCalcMasterEnrichmentProposals({ dataset, masters, projectProfile: projectDataStore.getProfile() });
-  generated.proposals.forEach((proposal) => nonFeaEnrichmentStore.stageProposal(proposal));
-  nonFeaEnrichmentStore.acceptAllProposals();
-  const review = buildFittingWeightReviewRows({ dataset, masters });
-  const fittingRecords = review.rows
-    .filter((row) => row.clearWinner)
-    .map((row) => fittingWeightRecordFor(row, row.candidates[0], 0, masters));
-  fittingRecords.forEach((record) => nonFeaEnrichmentStore.stageProposal({
-    proposalId: record.recordId, rationale: 'End-to-end suite: clear catalogue winner.', record,
-  }));
-  nonFeaEnrichmentStore.acceptAllProposals();
-
-  // 5. SAMPLE ASSUMPTION fitting weights, as the Stage proposal form builds them.
-  for (const [entityId, kg, basis] of SAMPLE_FITTING_WEIGHTS) {
-    const recordId = `sample-assumption:COMPONENT_WEIGHT:${entityId}`;
-    const sourceId = 'SAMPLE ASSUMPTION — not project data';
-    nonFeaEnrichmentStore.stageProposal({
-      proposalId: recordId,
-      rationale: `SAMPLE ASSUMPTION — not project data. Placeholder weight from catalogue: ${basis}.`,
-      record: {
-        recordId, selectorKind: 'ENTITY', selectorKey: entityId, fieldId: 'COMPONENT_WEIGHT',
-        value: kg, unit: 'kg', authority: 'ACCEPTED_OVERRIDE', sourceId, revision: '2026-11-26',
-        evidence: { source: sourceId, locator: entityId },
-      },
-    });
-  }
-  nonFeaEnrichmentStore.acceptAllProposals();
-  const enrichment = nonFeaEnrichmentStore.getSnapshot();
-  const inputCheck = evaluateCurrentNonFeaCommonInput().report;
+  const { dataset, lineRows } = loaded;
 
   // 6. Run, through the same controller method as the Run button.
   let failure = null;
@@ -175,6 +121,10 @@ async function run(lineListPath, warnings) {
   // them for the Results page (from the same stores).
   const horizontal = currentFrictionLoads(distribution);
   const restraintTable = buildSupportRestraintTable({ supportSiteModel, routePartitionModel, profile });
+  // The SAMPLE ASSUMPTION notice the Load Calc controller puts on the Results page.
+  const sampleAssumptions = sampleAssumptionItems({
+    acceptedRecords: nonFeaEnrichmentStore.getSnapshot().acceptedRecords, profile,
+  });
 
   // Results pane, with the arguments the Load Calc controller passes.
   const pane = { innerHTML: '' };
@@ -186,15 +136,16 @@ async function run(lineListPath, warnings) {
 
   return {
     dataset, profile, lineRows, distribution, runtime, horizontal, restraintTable,
-    supportSiteModel, routePartitionModel, paneHtml: pane.innerHTML, warnings,
+    supportSiteModel, routePartitionModel, paneHtml: pane.innerHTML, warnings, sampleAssumptions,
     inputs: {
-      proposals: generated.proposals.length,
-      fittingClearWinners: fittingRecords.length,
-      fittingReviewRows: review.rows.length,
-      acceptedRecords: enrichment.acceptedRecords.length,
-      pendingProposals: enrichment.proposals.length,
-      inputCheck: inputCheck?.packageState,
-      readyMethods: inputCheck?.readyMethodIds || [],
+      proposals: loaded.proposals,
+      fittingClearWinners: loaded.fittingClearWinners,
+      fittingReviewRows: loaded.fittingReviewRows,
+      sampleAssumptionWeights: loaded.sampleAssumptionWeights,
+      acceptedRecords: loaded.acceptedRecords,
+      pendingProposals: loaded.pendingProposals,
+      inputCheck: loaded.inputCheck,
+      readyMethods: loaded.readyMethods,
     },
   };
 }

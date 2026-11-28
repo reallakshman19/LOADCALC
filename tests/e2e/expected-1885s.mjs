@@ -54,3 +54,12 @@ export const COMMON_EXPECTED = Object.freeze({
   lineStops: 11,
   guides: 6,
 });
+
+// The SAMPLE ASSUMPTION notice at the top of the Results page (owner rule:
+// sample assumptions stay labelled), with the sample Line List. The client
+// Line List gives every line a density, so its notice has no density line.
+export const SAMPLE_ASSUMPTION_NOTICE = Object.freeze([
+  '5 fitting weights are placeholders (408 kg, 15 kg, 4 kg, 4 kg, 3 kg), not project data.',
+  'Operating fluid density 1000 kg/m³ fallback on 4 line(s) with no density in the Line List: S8810101, S8810103, S8810111, S8810112.',
+  'Insulation thickness 0 mm wherever the Line List gives none (Project Data default 1885S_INSULATION_THICKNESS_SAMPLE_ZERO).',
+]);

@@ -2,8 +2,10 @@
 import { EVENT_TOPICS } from './event-topics.js';
 import { MODEL_ZONE_EVENTS } from './model-zone-selector.js';
 import {
+  ensureSampleProjectButton,
   ensureTopologyEditDemoButton,
   ensureTopologyEditXyzBranchDemoButton,
+  loadSampleProjectFromToolbar,
   loadTopologyEditDemo,
   loadTopologyEditXyzBranchDemo,
   publishDatasetLoad,
@@ -40,6 +42,7 @@ export function initializeTreePanel(panel) {
   panel.clearButton = panel.requireElement('[data-action="clear-dataset"]');
   panel.demoButton = ensureTopologyEditDemoButton(panel);
   panel.xyzBranchDemoButton = ensureTopologyEditXyzBranchDemoButton(panel);
+  panel.sampleProjectButton = ensureSampleProjectButton(panel);
   panel.searchElement = panel.requireElement('[data-role="tree-search"]');
   panel.pipesElement = panel.requireElement('[data-role="summary-pipes"]');
   panel.supportsElement = panel.requireElement('[data-role="summary-supports"]');
@@ -65,6 +68,7 @@ export function handleTreeClick(panel, event) {
   if (!trigger || !panel.rootElement.contains(trigger)) return;
   if (trigger.dataset.action === 'import-dataset') { panel.fileElement.click(); return; }
   if (trigger.dataset.action === 'load-topology-edit-demo') { void loadTopologyEditDemo(panel); return; }
+  if (trigger.dataset.action === 'load-sample-project') { void loadSampleProjectFromToolbar(panel); return; }
   if (trigger.dataset.action === 'load-topology-edit-xyz-branch-demo') {
     void loadTopologyEditXyzBranchDemo(panel);
     return;
@@ -113,6 +117,7 @@ export function destroyTreePanel(panel) {
   panel.sourceDataset = null;
   panel.demoButton = null;
   panel.xyzBranchDemoButton = null;
+  panel.sampleProjectButton = null;
   panel.initialized = false;
 }
 
