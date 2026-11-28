@@ -51,6 +51,8 @@ export async function runHeadless1885S({ lineListPath = SAMPLE_LINE_LIST } = {})
   if (used) throw new Error('runHeadless1885S runs once per process (app stores are singletons).');
   used = true;
   servePublicFolderToFetch();
+  // Topology review records live in browser storage; in Node, an in-memory one.
+  if (!globalThis.localStorage) globalThis.localStorage = memoryStorage();
   const warnings = [];
   const originalWarn = console.warn;
   console.warn = (...args) => { warnings.push(args.map(String).join(' ')); };
@@ -108,6 +110,18 @@ async function run(lineListPath, warnings) {
   });
   const { dataset, lineRows } = loaded;
 
+  // Check Topology (step 2), as the Load Calc controller evaluates it.
+  const { evaluateCurrentTopologyCheck } = await import('../../src/workspace/topology-edit/topology-edit-check-runtime.js');
+  const topologyCheckSnapshot = evaluateCurrentTopologyCheck();
+  const topologyCheck = {
+    state: topologyCheckSnapshot.state,
+    blocking: topologyCheckSnapshot.blockingIssueCount,
+    openReview: topologyCheckSnapshot.reviewIssueCount,
+    openReviewKinds: topologyCheckSnapshot.reviewFindings.map((finding) => finding.kind),
+    projectDataClassified: topologyCheckSnapshot.projectDataClassifiedSupports
+      .map((row) => `${row.tag} ${row.type}`),
+  };
+
   // 6. Run, through the same controller method as the Run button.
   let failure = null;
   EventBus.subscribe(ENGINEERING_MODEL_EVENTS.FAILED, (event) => { failure = event; });
@@ -150,7 +164,7 @@ async function run(lineListPath, warnings) {
 
   return {
     dataset, profile, lineRows, distribution, runtime, horizontal, restraintTable,
-    supportSiteModel, routePartitionModel, paneHtml, warnings, sampleAssumptions, afterScreensOpen,
+    supportSiteModel, routePartitionModel, paneHtml, warnings, sampleAssumptions, afterScreensOpen, topologyCheck,
     inputs: {
       proposals: loaded.proposals,
       fittingClearWinners: loaded.fittingClearWinners,
@@ -161,6 +175,16 @@ async function run(lineListPath, warnings) {
       inputCheck: loaded.inputCheck,
       readyMethods: loaded.readyMethods,
     },
+  };
+}
+
+function memoryStorage() {
+  const items = new Map();
+  return {
+    getItem: (key) => (items.has(key) ? items.get(key) : null),
+    setItem: (key, value) => { items.set(key, String(value)); },
+    removeItem: (key) => { items.delete(key); },
+    clear: () => { items.clear(); },
   };
 }
 

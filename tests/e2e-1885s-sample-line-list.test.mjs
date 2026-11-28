@@ -51,6 +51,15 @@ test('1885S sample: Results pane shows the current values and labels', () => {
   assert.ok(ope.includes('expansion table not filled / not approved yet'));
 });
 
+test('1885S sample: Check Topology takes the support type Project Data gives 51465', () => {
+  // =1006649732/51465 has no type in the source; Project Data sets it to NONE,
+  // so it is not left as an open review.
+  assert.deepEqual(result.topologyCheck, {
+    state: 'READY', blocking: 0, openReview: 0, openReviewKinds: [],
+    projectDataClassified: ['=1006649732/51465 NONE'],
+  });
+});
+
 test('1885S sample: opening Calculation Defaults after the Run keeps the Run current', () => {
   // The seal wrote the product defaults first, so the screen finds nothing to fill.
   assert.deepEqual(result.afterScreensOpen, { screenWroteDefaults: false, commonInputStale: false, paneUnchanged: true });

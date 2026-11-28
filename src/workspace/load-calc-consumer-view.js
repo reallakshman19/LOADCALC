@@ -324,6 +324,7 @@ export function renderLoadCalcTopologyPane(
       ${diagnosticCard('Skipped findings', topologyCheck?.skippedIssueCount ? 'REVIEW_REQUIRED' : 'READY', topologyCheck?.skippedIssueCount || 0)}
     </div>
     ${modelBlockerMarkup(modelBlockers)}
+    ${projectDataClassifiedSupportsMarkup(topologyCheck?.projectDataClassifiedSupports)}
     ${topologyFindingsMarkup(findings, topologyCheck, skipError)}
     ${topologyDispositionMarkup(status, topologyCheck)}
   </section>`;
@@ -343,6 +344,16 @@ function findingSetStatus(findings) {
     return 'BLOCKED';
   }
   return findings.length ? 'REVIEW_REQUIRED' : 'READY';
+}
+
+// Supports with no source type that Project Data classifies: not open reviews,
+// but listed so the decision stays visible.
+function projectDataClassifiedSupportsMarkup(rows) {
+  if (!Array.isArray(rows) || !rows.length) return '';
+  return `<section class="load-calc-error-check__group" data-topology-review-section="project-data-classified"><h3>Support types set in Project Data</h3>
+    <p>${rows.length} support(s) have no type in the source model; Project Data gives the type, so they are not open reviews. Change them in Project Data (${escapeHtml(rows[0].projectDataPath)}).</p>
+    <ul class="load-calc-project-data-classified">${rows.map((row) => `<li data-project-data-classified-support="${escapeHtml(row.tag)}"><code>${escapeHtml(row.tag)}</code> → <span>${escapeHtml(row.type)}${row.type === 'NONE' ? ' — carries no load' : ''}</span></li>`).join('')}</ul>
+  </section>`;
 }
 
 function loadModelTopologyBlockers(supportSiteModel, routePartitionModel) {

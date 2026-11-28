@@ -29,6 +29,12 @@ import {
   topologyEditCheckSnapshotStore,
 } from './topology-edit-check-snapshot-store.js';
 import { checkCanonicalTopology } from './topology-edit-checker.js';
+import { projectDataStore } from '../project-data/project-data-store.js';
+import { projectDataEntry } from '../project-data/project-data-contract.js';
+import {
+  SUPPORT_TYPE_OVERRIDE_PATH,
+  createProjectDataSupportTypeLookup,
+} from '../support-sites/support-site-model.js';
 
 export { TOPOLOGY_EDIT_CHECK_SNAPSHOT_SCHEMA };
 
@@ -73,6 +79,11 @@ export function evaluateCurrentTopologyCheck() {
     topologyGraphSemanticHash: topologyGraph.semanticHash ?? null,
     attachmentModelSemanticHash: attachmentModel?.semanticHash ?? null,
     restraintModelSemanticHash: restraintModel?.semanticHash ?? null,
+    // A Project Data support type closes a restraint-family review (below), so
+    // a change to it must not reuse a cached result.
+    supportTypeOverridesSemanticHash: semanticHash(
+      projectDataEntry(projectDataStore.getProfile(), SUPPORT_TYPE_OVERRIDE_PATH) ?? null,
+    ),
     exactToleranceMm,
   });
   if (cachedSnapshot && cachedBasisKey === basisKey) return publishSnapshot(cachedSnapshot);
@@ -109,7 +120,19 @@ export function evaluateCanonicalTopologyCheck(input) {
   assertEvaluationInput(input);
   const exactToleranceMm = input.exactToleranceMm
     ?? topologyEditFindingReviewStore.getGapAutofixToleranceMm();
-  const issues = checkCanonicalTopology(input.canonicalTopology, {});
+  const rawIssues = checkCanonicalTopology(input.canonicalTopology, {});
+  // A support with no source type that Project Data has classified
+  // (topology.supportTypeOverridesByTag) is already decided: the support-site
+  // model and restraint table use that type. Its restraint-family review is
+  // closed and listed under projectDataClassifiedSupports instead.
+  const classified = projectDataClassifiedSupports(
+    rawIssues,
+    input.dataset,
+    input.canonicalTopology,
+    input.projectDataProfile ?? projectDataStore.getProfile(),
+  );
+  const classifiedIssueIds = new Set(classified.map((row) => row.issueId));
+  const issues = rawIssues.filter((issue) => !classifiedIssueIds.has(issue.id));
   const findings = issues.map((issue) => issueRecord(
     issue,
     input.dataset,
@@ -147,6 +170,7 @@ export function evaluateCanonicalTopologyCheck(input) {
     reviewFindings,
     countsByKind: countBy(findings, 'kind'),
     countsBySeverity: countBy(findings, 'severity'),
+    projectDataClassifiedSupports: classified,
     autoFix: {
       exactToleranceMm: autoFixPlan.exactToleranceMm,
       nearToleranceMm: autoFixPlan.nearToleranceMm,
@@ -168,6 +192,26 @@ export function evaluateCanonicalTopologyCheck(input) {
 export function invalidateTopologyCheckSnapshot() {
   cachedBasisKey = '';
   cachedSnapshot = null;
+}
+
+function projectDataClassifiedSupports(issues, dataset, canonicalTopology, profile) {
+  const familyIssues = issues.filter((issue) => issue.kind === 'UNKNOWN_RESTRAINT_FAMILY');
+  if (!familyIssues.length) return [];
+  const typeFor = createProjectDataSupportTypeLookup(profile);
+  const supports = new Map((canonicalTopology.supports || []).map((support) => [support.id, support]));
+  const entities = new Map((dataset.entities || []).map((entity) => [entity.entityId, entity]));
+  return familyIssues.flatMap((issue) => {
+    const support = supports.get(issue.supportId);
+    const decided = typeFor(entities.get(support?.entityId));
+    return decided ? [{
+      issueId: issue.id,
+      supportId: issue.supportId,
+      entityId: support.entityId,
+      tag: decided.tag,
+      type: decided.type,
+      projectDataPath: SUPPORT_TYPE_OVERRIDE_PATH,
+    }] : [];
+  });
 }
 
 function issueRecord(issue, dataset, canonicalTopology) {

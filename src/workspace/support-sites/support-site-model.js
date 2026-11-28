@@ -104,6 +104,28 @@ function supportTypeOverrides(profile, blockers) {
   return map;
 }
 
+/**
+ * Looks up the approved Project Data type for a support entity exactly as the
+ * site model applies it: by canonical tag, and only when the source type is
+ * blank (a source type always wins). Returns (entity) => { tag, type } | null.
+ * An invalid or unapproved override entry gives no types (the site model
+ * reports it as a blocker).
+ */
+export function createProjectDataSupportTypeLookup(profile) {
+  const effectiveProfile = createNonFeaProductDefaultProvider({ profile }).effectiveProfile;
+  const blockers = [];
+  const overrides = supportTypeOverrides(effectiveProfile, blockers);
+  if (blockers.length) return () => null;
+  return (entity) => {
+    if (!entity) return null;
+    const attributes = entity.properties?.attributes || {};
+    if (stringValue(attributes.SUPPORT_TYPE || attributes.SUPPORT_KIND || attributes.CMPSUPTYPE)) return null;
+    const tag = canonicalTag(attributes, entity);
+    const type = overrides.get(tag);
+    return type ? { tag, type } : null;
+  };
+}
+
 function applyTypeOverride(member, overrides) {
   const type = overrides.get(member.tag);
   if (!type || member.sourceType || type === 'NONE') return member;
