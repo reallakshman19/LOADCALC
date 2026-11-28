@@ -204,7 +204,13 @@ Owner decisions (2026-11-26), stored in Project Data with that evidence:
 
 1885S result: 19 R, 6 R+LS, 1 R+G, 5 R+G+LS, 5 NONE, 0 blocked; every support sits on horizontal pipe. μ is the 0.3 default everywhere (which supports have PTFE plates is still unknown); gaps are the 0 mm default. Browser Run after the decisions: equilibrium PASSED, coverage 100 % in EMPTY / OPE / HYD, same applied loads.
 
-Not built yet: a review screen for the table in the app (today it is a script and a data module).
+**Restraints review screen (2026-11-28):** the Load Calc **Restraints** tab now opens with the restraint table (`src/workspace/support-sites/support-restraint-review-view.js`).
+- **What it shows**, one row per support site: tag, line, X/Y/Z, type code, what it holds (vertical / along / across), friction directions and μ, gap, pipe orientation, where the type came from (model or owner decision) and status. Blocked supports are named.
+- **Editing:** a support whose parts all have a blank SUPPORT_TYPE in the model gets a type picker (REST / GUIDE / LINESTOP / NONE). "Save support types" writes `topology.supportTypeOverridesByTag` as an approved owner decision, adding the dated change to its evidence. Types from the model are shown, not edited.
+- **Model rebuild:** `topology.supportTypeOverridesByTag` and `topology.supportTypeCapabilities` are now in the support-model rebuild basis (`engineering-model-basis.js`), so a saved type rebuilds the support-site model. As with any Project Data change, the sealed input and the Run go stale.
+- **Blank count:** `blankTypePartCount` counts parts blank in the source model, including those typed since by an owner decision, so they stay editable.
+- **Browser check, 1885S:** 36 sites (19 R, 6 R+LS, 1 R+G, 5 R+G+LS, 5 NONE) and 6 pickers (PS-12297 and the 5 ATTA / PENE points). Round trip PS-12297 REST → NONE → REST: Project Data, the evidence and the support model followed each time.
+- Tests: `tests/support-restraint-review.test.mjs`, plus a rebuild test in `tests/engineering-model-controller-dataset-guard.test.mjs`.
 
 #### Friction loads (guide / line stop plan, step 3, 2026-11-27)
 

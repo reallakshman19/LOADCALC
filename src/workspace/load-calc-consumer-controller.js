@@ -42,7 +42,13 @@ import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lat
 import { buildSupportLineStopThermal } from './support-sites/support-line-stop-thermal.js';
 import { withLineListOperatingTemperatures } from './support-sites/line-list-temperatures.js';
 import { lineExpansionCoefficients } from './support-sites/thermal-expansion-table.js';
-import { projectDataValue } from './project-data/project-data-contract.js';
+import { projectDataEntry, projectDataValue } from './project-data/project-data-contract.js';
+import { SUPPORT_TYPE_OVERRIDE_PATH } from './support-sites/support-site-model.js';
+import {
+  applyRestraintReviewPicks,
+  renderSupportRestraintReview,
+  restraintReviewRows,
+} from './support-sites/support-restraint-review-view.js';
 import { buildRouteLegs } from './routes/route-legs.js';
 import { TOPOLOGY_EVENTS } from './topology-events.js';
 
@@ -518,6 +524,44 @@ export class LoadCalcConsumerController {
     else this.renderDeferredPane(this.activeTab, pane, revision);
   }
 
+  // Restraints review (guide / line stop step 1): the restraint table, with a
+  // type picker for supports the model gives no type. Saving writes
+  // topology.supportTypeOverridesByTag, which rebuilds the support model.
+  renderRestraintReview(host) {
+    const profile = projectDataStore.getProfile();
+    const supportSiteModel = engineeringModelStore.getSupportSiteModel();
+    const routePartitionModel = engineeringModelStore.getRoutePartitionModel();
+    let restraintTable = null;
+    let message = null;
+    try {
+      if (supportSiteModel && routePartitionModel) {
+        restraintTable = buildSupportRestraintTable({ supportSiteModel, routePartitionModel, profile });
+      } else {
+        message = 'Load a model to review its supports.';
+      }
+    } catch (error) {
+      message = `The restraint table could not be built: ${error.message}`;
+    }
+    const overrides = projectDataValue(profile, SUPPORT_TYPE_OVERRIDE_PATH) || {};
+    renderSupportRestraintReview(host, {
+      restraintTable,
+      overrides,
+      message,
+      onSave: (picks) => {
+        const rows = restraintReviewRows(restraintTable, overrides);
+        const result = applyRestraintReviewPicks(overrides, rows, picks);
+        if (!result.changes.length) return result;
+        const prior = projectDataEntry(profile, SUPPORT_TYPE_OVERRIDE_PATH)?.evidence || {};
+        const stamp = new Date().toISOString().slice(0, 10);
+        projectDataStore.update(SUPPORT_TYPE_OVERRIDE_PATH, result.overrides, {
+          source: 'Owner decisions in the Restraints review (support types for supports with no SUPPORT_TYPE in the model)',
+          locator: [prior.locator, `${stamp}: ${result.changes.join('; ')}`].filter(Boolean).join(' | '),
+        }, true);
+        return result;
+      },
+    });
+  }
+
   async renderDeferredPane(tab, pane, revision) {
     try {
       const empiricalState = {
@@ -543,7 +587,11 @@ export class LoadCalcConsumerController {
         const scenarioView = await import('./engineering-loads/empirical-load-calc-scenario-view.js');
         if (revision !== this.renderRevision) return;
         if (tab === 'overview') scenarioView.renderEmpiricalScenarioOverview(pane, empiricalState);
-        else if (tab === 'restraints') scenarioView.renderEmpiricalScenarioRestraints(pane, empiricalState);
+        else if (tab === 'restraints') {
+          pane.innerHTML = '<div data-restraint-review-host></div><div data-scenario-restraints-host></div>';
+          this.renderRestraintReview(pane.querySelector('[data-restraint-review-host]'));
+          scenarioView.renderEmpiricalScenarioRestraints(pane.querySelector('[data-scenario-restraints-host]'), empiricalState);
+        }
         else if (tab === 'load-cases') scenarioView.renderEmpiricalScenarioLoadCases(pane, empiricalState);
         else if (tab === 'methods') scenarioView.renderEmpiricalScenarioMethods(pane, empiricalState);
         else if (tab === 'results') scenarioView.renderEmpiricalScenarioResults(pane, empiricalState);

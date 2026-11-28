@@ -3,6 +3,10 @@ const PROJECT_DATA_TOPOLOGY_MODEL_PATHS = Object.freeze([
   'topology.portMatchToleranceMm',
   'topology.autoCarrierCoincidenceToleranceMm',
   'topology.routeJoiningRules',
+  // The support-site model reads support types from these, so a change
+  // (e.g. a type set in the Restraints review) rebuilds it.
+  'topology.supportTypeCapabilities',
+  'topology.supportTypeOverridesByTag',
 ]);
 
 /**

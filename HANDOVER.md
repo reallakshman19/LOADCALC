@@ -137,7 +137,7 @@ In `support-load-distribution-v3.js`, `calculateRoute()`:
 
 ### Steps 1–7: guide and line stop loads
 These follow [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md):
-1. restraint table: **done 2026-11-26** (`src/workspace/support-sites/support-restraint-table.js`, `node benchmarks/checks/1885s-restraint-table.mjs`); an in-app review screen is still to do
+1. restraint table: **done 2026-11-26** (`src/workspace/support-sites/support-restraint-table.js`, `node benchmarks/checks/1885s-restraint-table.mjs`); **in-app review screen done 2026-11-28** (Load Calc → Restraints tab; type picker for blank-type supports saves `topology.supportTypeOverridesByTag`)
 2. legs and free growth: **legs done 2026-11-27** (`src/workspace/routes/route-legs.js`); free growth waits for real temperatures (reuse `createNonFeaThermalFreeMovementBasis` in `src/core/non-fea-engineering-foundation/thermal-free-movement.js`)
 3. friction (ACCURATE): **design friction μ × N_OPE done 2026-11-27** (`src/workspace/support-sites/support-friction-loads.js`, shown in the Results OPE table via `currentFrictionLoads()` in `load-calc-consumer-controller.js`); movement-based friction needs free growth and neutral points
 4. line stop axial: **friction part done 2026-11-27** (`src/workspace/support-sites/support-line-stop-loads.js`, Results page under the OPE table; design = larger side). **Thermal push done 2026-11-28** (`support-line-stop-thermal.js`, SCREENING; shared ground `thermal-bending-context.js`): lower bounds for every 1885S stop; upper bounds open where a side runs to a line end or past an unguided elbow into more legs; "if the line end is fixed" findings

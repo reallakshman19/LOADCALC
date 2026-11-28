@@ -77,7 +77,7 @@ For each support and each case (EMPTY / OPE / HYD / optional OCC), report vertic
 | # | Work | Depends on | Output label |
 | --- | --- | --- | --- |
 | 0 | Option B (three-moment with lift-off) for vertical loads. **Done 2026-11-26**, in the Run as CONTINUOUS_SPAN_THREE_MOMENT_V1 | — | ACCURATE |
-| 1 | Restraint table proposal and support-function mapping. **Done 2026-11-26** as data + script (`support-restraint-table.js`); an in-app review screen is still to do | — | data |
+| 1 | Restraint table proposal and support-function mapping. **Done 2026-11-26** as data + script (`support-restraint-table.js`); **in-app review screen done 2026-11-28** (Restraints tab) | — | data |
 | 2 | Leg decomposition and free growth (reuse thermal-free-movement). **Legs done 2026-11-27** (`route-legs.js`; axial runs join legs through offsets of at most `topology.legOffsetMaxAngleDeg`, 30° for 1885S by owner decision); free growth waits for temperatures | 1, temperatures | data |
 | 3 | Friction loads, movement-based and design. **Design friction done 2026-11-27** (`support-friction-loads.js`, Results page); movement-based waits for free growth and neutral points | 0, 2 | ACCURATE |
 | 4 | Line stop axial: friction part, then the flexibility upper bound. **Friction part done 2026-11-27** (`support-line-stop-loads.js`, Results page; design = larger side, net also shown). **Thermal push done 2026-11-28** (`support-line-stop-thermal.js`): bounded where a guide sits past the elbow; otherwise lower bound + "if the line end is fixed" finding; multi-leg upper bounds need a flexibility method | 3 | ACCURATE + SCREENING |

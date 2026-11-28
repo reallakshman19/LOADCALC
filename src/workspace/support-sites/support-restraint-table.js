@@ -105,7 +105,10 @@ function siteRow(site, context) {
     gapBasis: gapMm?.basis ?? null,
     pipe,
     partCount: members.length,
-    blankTypePartCount: members.filter((member) => !stringValue(member.sourceType)).length,
+    // Parts with no SUPPORT_TYPE in the source model, including those typed
+    // since by an owner decision (Project Data override).
+    blankTypePartCount: members.filter((member) => !stringValue(member.sourceType)
+      || member.sourceTypeAuthority === 'PROJECT_DATA_SUPPORT_TYPE_OVERRIDE').length,
     unknownTypes,
   };
 }

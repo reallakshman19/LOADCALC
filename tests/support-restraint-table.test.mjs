@@ -108,6 +108,8 @@ test('Project Data can type a blank support or mark it NONE; a source type alway
   const member = supportSiteModel.members.find((row) => row.tag === 'S-BLANK');
   assert.equal(member.sourceType, 'REST');
   assert.equal(member.sourceTypeAuthority, 'PROJECT_DATA_SUPPORT_TYPE_OVERRIDE');
+  assert.equal(typed.blankTypePartCount, 1, 'still counted as blank in the source, so it stays editable in the review');
+  assert.equal(byTag('S-SRC').blankTypePartCount, 0);
   const pene = byTag('S-PENE');
   assert.equal(pene.status, 'NOT_A_SUPPORT');
   assert.equal(pene.code, 'NONE');

@@ -24,6 +24,7 @@ function projectProfile(overrides = {}) {
         sourceOrderAllowed: false,
         degreeAboveTwo: 'BLOCKED',
       }),
+      supportTypeOverridesByTag: projectField(overrides.supportTypeOverridesByTag ?? {}),
     },
     loadCalculation: {
       gravityMPerS2: projectField(overrides.gravityMPerS2 ?? 9.80665),
@@ -173,6 +174,17 @@ test('topology-policy Project Data change rebuilds support-route models once and
       topologyCheckAffected: true,
       topologyModelRebuilt: true,
     }]]);
+  } finally { state.restore(); }
+});
+
+test('a support type set for a blank-type support rebuilds the support-site model', () => {
+  const dataset = { datasetId: 'dataset:1', version: 4 };
+  const base = projectProfile();
+  const state = harness(dataset);
+  state.controller.projectTopologyModelBasis = projectDataTopologyModelBasis(base);
+  try {
+    state.controller.handleProjectDataChanged({ profile: projectProfile({ supportTypeOverridesByTag: { 'PS-1': 'REST' } }) });
+    assert.deepEqual(state.calls.rebuild, [dataset]);
   } finally { state.restore(); }
 });
 
