@@ -4,6 +4,35 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 [ROADMAP.md](ROADMAP.md) (audit, phases, results tables) and
 [docs/guide-line-stop-load-plan.md](docs/guide-line-stop-load-plan.md).
 
+## 0. Checkpoint 2026-11-28 (read this first when resuming)
+
+**State:** guide / line stop plan steps 0–5 are built and on the Results page; tests 327/327, lint 0 errors.
+
+| Piece | Label | Where | 1885S now |
+| --- | --- | --- | --- |
+| Vertical loads, Option B three-moment + lift-off (AUTO) | ACCURATE | `support-load-distribution-v3.js` | EMPTY / OPE / HYD 101.4 / 102.5 / 117.8 kN, equilibrium PASSED, coverage 100 % |
+| Restraint table + in-app review (Restraints tab) | data | `support-restraint-table.js`, `support-restraint-review-view.js` | 36 sites: 19 R, 6 R+LS, 1 R+G, 5 R+G+LS, 5 NONE |
+| Design friction μ·N_OPE | ACCURATE | `support-friction-loads.js` | 24,565 N over 25 sliding supports |
+| Legs, axial runs (offsets ≤ 30° joined) | data | `routes/route-legs.js` | only S8811951/B2 joins (two eccentric reducers) |
+| Line stop axial, friction part | ACCURATE | `support-line-stop-loads.js` | largest PS-12248 4,690 N |
+| Line stop thermal push | SCREENING | `support-line-stop-thermal.js` | lower bounds for all 11; upper bounds open; "if line end fixed" findings (PS-12060 ≈ 739 kN) |
+| Guide lateral bounds | SCREENING | `support-guide-lateral-loads.js` | PS-12268 2,144–8,578 N; PS-12242 496–1,984 N; PS-12248 3–153 N |
+| Line temperatures from the Line List (T2) | input | `line-list-temperatures.js` | 5 steam lines 309 °C (design 325 °C) |
+| Insulation from the Line List | input | `load-calc-master-candidates.js` | 120 / 100 / 80 mm (10″ / 8″ / 6″), +13.80 kN |
+| Expansion table by material × temperature | input | `thermal-expansion-table.js` | **empty placeholder**, α = 1.17×10⁻⁵ used |
+
+**Benchmark now runs with the real client Line List** (local only, `public/fixtures/AML-*.xlsx`, excluded in `.git/info/exclude`, never commit). Upload it in Master Data in place of the sample CSV in `benchmarks/browser/1885s-run-steps.js` step 3; the rest of the steps are unchanged. The browser pane is slow: run each step as its own call and check the page before the next one.
+
+**Waiting on the owner:**
+- the filled expansion table (template `project-data/thermal-expansion-table-template.csv`, converter `benchmarks/checks/expansion-table-from-csv.mjs`);
+- what the 1885S line ends are (nozzle, tee or free end) — decides the line stop findings;
+- guide lateral capacities (for the too-close-to-elbow flag), only if wanted;
+- a CAESAR II run for the accuracy figure, if available.
+
+**Not built:** wind / seismic g-factor loads (plan step 6); multi-leg flexibility for open upper bounds (would need an owner decision; no whole-system stiffness solve, per the owner); movement-based friction (neutral points).
+
+**Pushing:** push only when the owner says yes. If plain `git push` asks for a password, use the signed-in GitHub CLI as the credential helper for that push (`git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`, with the full path to `gh` if it is not on PATH). The repo's local git identity is reallakshman19 (owner decision 2026-11-27).
+
 ## 1. What this is
 
 - **App:** a Vite + vanilla JS app. It holds Load Calc (empirical, non-FEA pipe support loads) and 3D Edit, extracted from [Advanced_Analysis](https://github.com/reallakshman19/Advanced_Analysis).
