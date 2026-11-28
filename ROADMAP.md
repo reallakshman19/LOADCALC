@@ -333,6 +333,24 @@ The pipes the Run counts add 1,407 kg = **13.80 kN**, exactly the EMPTY increase
 - Guides: unchanged (they depend on temperature and stiffness, not weight). PS-12268 2,144–8,578 N; PS-12242 496–1,984 N; PS-12248 3–153 N.
 - Sample assumptions left: the 5 placeholder fitting weights. The 1,000 kg/m³ fluid fallback and the 0 mm insulation no longer apply to any 1885S line.
 
+#### Line stop thermal push (guide / line stop plan, step 6, 2026-11-28)
+
+`src/workspace/support-sites/support-line-stop-thermal.js`, label **SCREENING**. The shared geometry and thermal ground used with the guide check is in `thermal-bending-context.js`. On each side of a stop, its run grows towards the elbow by δ = α·ΔT·L (L = stop to elbow corner), and the run past the elbow must move sideways by δ·sin(turn). The push on the stop depends on what is past the elbow:
+- **A guide there** (first from the elbow, L_b = elbow corner to that guide): 3·E·I·δ/L_b³ to 12·E·I·δ/L_b³, plus the sideways friction of the rests between.
+- **No guide there:** lower = the sideways friction of its rests. There is no upper bound from this hand method, because its far end decides it:
+  - more legs beyond → "needs the following legs" (multi-leg flexibility, not modelled);
+  - it runs to the line end → design finding SHORT_LEG_TO_LINE_END: the force if that end were fixed (e.g. a nozzle), capped at the fully blocked force E·A·α·ΔT of the stop's run when bending would need more.
+- **A side running to the line end itself:** end condition unknown, so no push is estimated.
+- **A side ending at another stop:** growth blocked, design finding E·A·α·ΔT, never a load.
+- **Per side:** friction (ACCURATE) + push; design = the larger side. An upper bound is shown only when every side has one; otherwise it is "open", never understated.
+- Results page: the last column of the line stop table. Tests: `tests/support-line-stop-thermal.test.mjs`. Hand check on a 6″ Sch 40 L-bend, ΔT 100 °C: δ = 3.78 mm; guide 2,229 mm past the corner gives 2,433 / 9,733 N; fully blocked 855 kN.
+
+1885S (browser Run 2026-11-28, Line List temperatures 309 °C, α 1.17×10⁻⁵):
+- **Lower bounds (friction + known push):** PS-12248 4,690 N; PS-12060 2,405; PS-12295 2,361; PS-12231 2,068; PS-12268 1,862; PS-12240 1,374; PS-12034 (8″) 1,236; PS-12169 996; PS-12034 (6″) 726; PS-12243 and PS-12166 0.
+- **Upper bounds:** open for all 11. Every stop has a side running to a line end or past an unguided elbow into more legs.
+- **Findings ("if the line end is fixed"):** PS-12060 ≈ 739 kN (1.8 m riser); PS-12034 (8″) ≈ 378 kN; PS-12034 (6″) ≈ 114 kN; PS-12295 ≈ 6 kN; PS-12248 and PS-12166 are too short to absorb the growth at all (up to the fully blocked force, about 4.7 and 11.6 MN). Whether those line ends are nozzles, tees or free ends decides whether these matter.
+- **To close the upper bounds:** a multi-leg flexibility method (e.g. the existing reference solver in `src/core/empirical-piping-mechanics/thermal-restraint-compatibility.js`, owner decision), or a CAESAR II run.
+
 #### Thermal expansion table (placeholder, 2026-11-27)
 
 - **Project Data:** `thermoMechanicalBasis.thermalExpansionTable` holds the expansion coefficient by material and temperature.

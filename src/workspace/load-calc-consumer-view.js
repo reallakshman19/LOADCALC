@@ -664,7 +664,7 @@ function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
     ${frictionNote}
     <table><thead><tr><th>Support site</th><th>Status</th><th>Vertical force (N, source Z-up)</th>${frictionHead}<th>Transfer moment demand (N·mm)</th><th>Contributors</th></tr></thead>
     <tbody>${loadCase.supportResults.map((row) => `<tr><td><button type="button" data-load-support-entity-id="${escapeHtml(primaryBySite.get(row.supportSiteId) || '')}">${escapeHtml(row.supportSiteId)}</button></td><td>${escapeHtml(row.status)}${current ? '' : ' / STALE'}</td><td>${force(row.verticalForceN, acceptedCurrent && isPublishableCaseStatus(row.status))}</td>${frictionCells(row.supportSiteId)}<td>${moment(row.cantileverMomentDemandNmm, acceptedCurrent && isPublishableCaseStatus(row.status))}</td><td>${integer(row.contributorIds?.length)}</td></tr>`).join('')}</tbody></table>
-    ${friction ? lineStopMarkup(frictionLoads.lineStops, acceptedCurrent) : ''}
+    ${friction ? lineStopMarkup(frictionLoads.lineStops, acceptedCurrent, frictionLoads.lineStopThermal) : ''}
     ${friction ? guideMarkup(frictionLoads.guides, acceptedCurrent, frictionLoads.temperatureSource) : ''}
     <details ${loadCase.status === 'CALCULATED_WITH_EXCEPTIONS' ? 'open' : ''}><summary>Exceptions (${integer(loadCase.exceptionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.exceptionLedger || [], null, 2))}</pre></details>
     <details><summary>Contribution ledger (${integer(loadCase.contributionLedger?.length)})</summary><pre>${escapeHtml(JSON.stringify(loadCase.contributionLedger || [], null, 2))}</pre></details>
@@ -675,9 +675,37 @@ function caseMarkup(distribution, supportSiteModel, frictionLoads = null) {
 }
 
 // Line stop axial loads, friction part (guide / line stop plan, step 4).
-function lineStopMarkup(lineStops, accepted) {
+function lineStopMarkup(lineStops, accepted, thermal = null) {
   if (!lineStops?.rows?.length) return '';
   const tagOf = (row) => row.tags?.find((tag) => tag.startsWith('PS-')) || row.tags?.[0] || row.siteId;
+  const thermalBySite = new Map((thermal?.rows || []).map((row) => [row.siteId, row]));
+  // Friction + push from the run past each elbow (SCREENING bounds).
+  const thermalCell = (siteId) => {
+    const row = thermalBySite.get(siteId);
+    if (!row) return '<td>—</td>';
+    if (row.lowerN === null) return `<td>${escapeHtml(row.status)}</td>`;
+    const sideText = row.sides.map((side) => {
+      const name = side.towards === 'START' ? 'start' : 'end';
+      if (side.status === 'LINE_END_UNKNOWN') return `${name}: line end, end condition unknown`;
+      if (side.status === 'GROWTH_BLOCKED_BY_NEXT_STOP') return `${name}: growth blocked by next stop (finding)`;
+      if (side.status !== 'CALCULATED') return `${name}: ${side.status}`;
+      if (!(side.deflectionMm > 0)) return `${name}: no growth`;
+      if (side.basisKind === 'GUIDE_ON_NEXT_RUN') {
+        return `${name}: grows ${side.deflectionMm.toFixed(2)} mm sideways into the next run (guide ${Math.round(side.bendLengthMm)} mm past elbow), push ${Math.round(side.pushLowerN)}–${Math.round(side.pushUpperN)} N`;
+      }
+      const open = side.upperStatus === 'NEEDS_FOLLOWING_LEGS' ? 'upper needs the legs beyond' : 'run goes to the line end';
+      return `${name}: grows ${side.deflectionMm.toFixed(2)} mm sideways into the next run (no guide past elbow), push ≥ ${Math.round(side.pushLowerN)} N, ${open}`;
+    }).join('<br>');
+    const findingText = (f) => {
+      if (f.code !== 'SHORT_LEG_TO_LINE_END') return `Growth blocked between stops: E·A·α·ΔT ≈ ${Math.round(f.fullyRestrainedForceN / 1000)} kN`;
+      return f.cappedAtFullyRestrained
+        ? `Leg to the line end (${Math.round(f.legLengthMm)} mm) too short to absorb ${f.deflectionMm.toFixed(1)} mm if that end is fixed (e.g. a nozzle): up to the fully blocked force ≈ ${Math.round(f.forceIfLineEndFixedN / 1000)} kN`
+        : `Leg to the line end (${Math.round(f.legLengthMm)} mm): about ${Math.round(f.forceIfLineEndFixedN / 1000)} kN if that end is fixed (e.g. a nozzle)`;
+    };
+    const findings = row.findings?.length ? `<br><small>FINDING: ${escapeHtml(row.findings.map(findingText).join('; '))}</small>` : '';
+    const upper = Number.isFinite(row.upperN) ? force(row.upperN, accepted) : 'open';
+    return `<td>${force(row.lowerN, accepted)} – ${upper}<br><small>${sideText}</small>${findings}</td>`;
+  };
   const sideCell = (side) => {
     if (!side) return '<td>—</td>';
     const value = side.frictionN === null ? escapeHtml(side.status) : force(side.frictionN, accepted);
@@ -687,12 +715,13 @@ function lineStopMarkup(lineStops, accepted) {
   const body = lineStops.rows.map((row) => {
     const [start, end] = row.sides;
     const finding = row.findings?.length ? ` <small>${escapeHtml(row.findings.map((f) => f.code).join(', '))}</small>` : '';
-    return `<tr data-line-stop-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${Number.isFinite(row.leg?.lengthMm) ? `${Math.round(row.leg.lengthMm)} mm` : '—'}${row.leg?.offsets?.length ? ` <small>(through ${integer(row.leg.offsets.length)} offset${row.leg.offsets.length > 1 ? 's' : ''}, ${escapeHtml(row.leg.offsets.map((o) => `${o.angleDeg}°`).join(', '))})</small>` : ''}</td>${sideCell(start)}${sideCell(end)}<td>${row.designAxialN === null ? escapeHtml(row.status) : force(row.designAxialN, accepted)}${finding}</td><td>${row.netAxialN === null ? '—' : force(row.netAxialN, accepted)}</td><td>not built (thermal, SCREENING)</td></tr>`;
+    return `<tr data-line-stop-site-id="${escapeHtml(row.siteId)}"><td>${escapeHtml(tagOf(row))}</td><td>${escapeHtml(row.code)}</td><td>${Number.isFinite(row.leg?.lengthMm) ? `${Math.round(row.leg.lengthMm)} mm` : '—'}${row.leg?.offsets?.length ? ` <small>(through ${integer(row.leg.offsets.length)} offset${row.leg.offsets.length > 1 ? 's' : ''}, ${escapeHtml(row.leg.offsets.map((o) => `${o.angleDeg}°`).join(', '))})</small>` : ''}</td>${sideCell(start)}${sideCell(end)}<td>${row.designAxialN === null ? escapeHtml(row.status) : force(row.designAxialN, accepted)}${finding}</td><td>${row.netAxialN === null ? '—' : force(row.netAxialN, accepted)}</td>${thermalCell(row.siteId)}</tr>`;
   }).join('');
   return `<h3>Line stops: axial load, friction part (ACCURATE)</h3>
     <p class="line-stop-basis">${escapeHtml(lineStops.basis)}</p>
-    <table class="line-stop-loads"><thead><tr><th>Line stop</th><th>Type</th><th>Leg length</th><th>Friction, start side (N)</th><th>Friction, end side (N)</th><th>Design axial (N)</th><th>Net if both sides slide (N)</th><th>Push from other legs</th></tr></thead>
-    <tbody>${body}</tbody></table>`;
+    <table class="line-stop-loads"><thead><tr><th>Line stop</th><th>Type</th><th>Leg length</th><th>Friction, start side (N)</th><th>Friction, end side (N)</th><th>Design axial (N)</th><th>Net if both sides slide (N)</th><th>With thermal push, lower – upper (N, SCREENING)</th></tr></thead>
+    <tbody>${body}</tbody></table>
+    ${thermal ? `<p class="line-stop-thermal-basis">${escapeHtml(thermal.basis)}</p>` : ''}`;
 }
 
 // Guide lateral loads from thermal growth, guided cantilever (plan step 7).

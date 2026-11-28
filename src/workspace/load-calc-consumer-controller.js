@@ -39,6 +39,7 @@ import { buildSupportRestraintTable } from './support-sites/support-restraint-ta
 import { buildSupportFrictionLoads } from './support-sites/support-friction-loads.js';
 import { buildSupportLineStopLoads } from './support-sites/support-line-stop-loads.js';
 import { buildSupportGuideLateralLoads } from './support-sites/support-guide-lateral-loads.js';
+import { buildSupportLineStopThermal } from './support-sites/support-line-stop-thermal.js';
 import { withLineListOperatingTemperatures } from './support-sites/line-list-temperatures.js';
 import { lineExpansionCoefficients } from './support-sites/thermal-expansion-table.js';
 import { projectDataValue } from './project-data/project-data-contract.js';
@@ -868,13 +869,23 @@ function currentFrictionLoads(distribution) {
     } catch (error) {
       console.warn('Guide lateral loads not shown:', error);
     }
+    let lineStopThermal = null;
+    try {
+      lineStopThermal = buildSupportLineStopThermal({
+        lineStops, restraintTable, routeLegs, frictionLoads: friction, profile: thermal.profile, distribution,
+        pipeSections: currentPipeSections(routePartitionModel),
+        expansionByLine: expansion.byLine,
+      });
+    } catch (error) {
+      console.warn('Line stop thermal push not shown:', error);
+    }
     const temperatureSource = {
       source: thermal.source,
       appliedByLine: thermal.applied,
       conflicts: thermal.conflicts,
       expansion: { status: expansion.status, lines: expansion.lines },
     };
-    return Object.freeze({ ...friction, lineStops, guides, temperatureSource });
+    return Object.freeze({ ...friction, lineStops, lineStopThermal, guides, temperatureSource });
   } catch (error) {
     console.warn('Friction or line stop loads not shown:', error);
     return friction;
