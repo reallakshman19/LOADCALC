@@ -190,7 +190,7 @@ The repo also registers `EMPIRICAL_RESTRAINT_NETWORK_V1/V2` (guide/line stop the
 
 ### Other Phase 1 items still open
 - ~~"Load sample project" button~~ Done 2026-11-28 ("Sample 1885S", see section 0).
-- Gate Run on Input Check, with a plain-language message.
+- ~~Gate Run on Input Check, with a plain-language message.~~ Done 2026-11-28 ("Blocked: N issues — open Input Check"; see ROADMAP Phase 1 step 4).
 - ~~End-to-end golden-number test (ROADMAP L11)~~ Done 2026-11-28 (`npm run test:e2e`).
 - ~~Map PS-12297 (SREF FT17-7.6-PMP) to a support family.~~ Owner set it to REST, 2026-11-26.
 - Confirm the 697 kg instrument `=1006649732/51250` with the owner.

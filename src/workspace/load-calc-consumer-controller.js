@@ -107,7 +107,7 @@ export class LoadCalcConsumerController {
       this.eventBus.subscribe(TOPOLOGY_EVENTS.CHANGED, () => { void this.refreshTopologyCheck(); }),
       this.eventBus.subscribe(SUPPORT_RESTRAINT_EVENTS.CHANGED, () => { void this.refreshTopologyCheck(); }),
       this.eventBus.subscribe(ENGINEERING_MODEL_EVENTS.CHANGED, ({ reason, distribution, topologyCheckAffected }) => this.handleEngineeringChange(reason, distribution, topologyCheckAffected)),
-      this.eventBus.subscribe(ENGINEERING_MODEL_EVENTS.FAILED, ({ message }) => this.handleFailure(message)),
+      this.eventBus.subscribe(ENGINEERING_MODEL_EVENTS.FAILED, ({ message, code }) => this.handleFailure(message, code)),
       this.eventBus.subscribe(EVENT_TOPICS.LOAD_CALC_SUBTAB_REQUESTED, ({ tab }) => { this.selectTab(tab); this.render(); }),
       this.eventBus.subscribe(EMPIRICAL_LOAD_CALC_SCENARIO_EVENTS.CHANGED, ({ snapshot }) => {
         this.message = empiricalScenarioMessage(snapshot);
@@ -202,7 +202,16 @@ export class LoadCalcConsumerController {
     }
   }
 
-  handleFailure(message) {
+  handleFailure(message, code = null) {
+    // A Run that stops because the inputs are not READY is told in plain words,
+    // and Input Check opens, so the user sees what is missing.
+    const plain = runInputFailureSentence(code, message);
+    if (plain) {
+      this.message = plain;
+      this.selectTab('preflight');
+      this.render();
+      return;
+    }
     this.message = message || 'Load calculation failed.';
     this.render();
   }
@@ -1004,6 +1013,27 @@ function topologyCheckPlaceholder(kind, message, state) {
 }
 
 /** Never lets a status-projection failure hide the rest of the guided workflow. */
+// Run failure codes that mean "the inputs are not READY" (thrown by the seal,
+// the Run authorization and the Run itself).
+const RUN_INPUT_NOT_READY_CODES = new Set([
+  'COMMON_INPUT_PRODUCT_SCREENING_SNAPSHOT_NOT_READY',
+  'NON_FEA_EMPIRICAL_RUN_AUTHORIZATION_NOT_READY',
+  'CURRENT_COMMON_INPUT_EMPIRICAL_RUN_COMMON_INPUT_NOT_READY',
+]);
+
+/** Plain sentence for a Run stopped by its inputs, or null for other failures. */
+export function runInputFailureSentence(code, message = '') {
+  if (RUN_INPUT_NOT_READY_CODES.has(code)) {
+    const count = safeValidationBlockerCount();
+    const issues = count > 0 ? ` (${count} issue${count === 1 ? '' : 's'})` : '';
+    return `Run stopped: Input Check is not READY${issues}. Input Check is open below; fix what it lists, then press Run again.`;
+  }
+  if (code === 'COMMON_INPUT_EVALUATION_FAILED') {
+    return `Run stopped: the inputs could not be checked (${message || 'no detail'}). Input Check is open below.`;
+  }
+  return null;
+}
+
 function safeValidationBlockerCount() {
   try {
     return createCurrentNonFeaWorkspaceStatusProjection()?.blockers?.length || 0;

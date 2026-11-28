@@ -42,7 +42,27 @@ export function renderLoadCalcConsumer(documentRef, state) {
     authorizationState: projectedAuthorization,
   });
 
-  if (!scenarioReady && routineAttemptAvailable && typeof section?.querySelector === 'function') {
+  const inputGate = runInputGate(state);
+  if (!scenarioReady && routineAttemptAvailable && inputGate.blocked && typeof section?.querySelector === 'function') {
+    // Run would only stop with an internal error: the button opens Input Check.
+    const button = section.querySelector('[data-load-calc-run]');
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute?.('disabled');
+      button.removeAttribute?.('data-load-calc-run');
+      button.setAttribute?.('data-goto-tab', 'preflight');
+      button.setAttribute?.('data-run-blocked-by-input-check', String(inputGate.issueCount));
+      button.title = 'Input Check is not READY. Open it to see what is missing.';
+      button.textContent = inputGate.label;
+    }
+    const authorityPill = (section.querySelectorAll?.('.empirical-load-calc__facts [data-pill-status]') || [])[1];
+    if (authorityPill) {
+      authorityPill.dataset.pillStatus = 'fail';
+      authorityPill.textContent = 'Input Check not READY';
+    }
+    const output = section.querySelector('[data-engineering-load-status]');
+    if (output && !state?.message) output.textContent = inputGate.sentence;
+  } else if (!scenarioReady && routineAttemptAvailable && typeof section?.querySelector === 'function') {
     const button = section.querySelector('[data-load-calc-run]');
     if (button) {
       button.disabled = false;
@@ -168,6 +188,30 @@ export function isRoutineRunReady(commonState) {
   return report?.packageState === 'READY'
     && nonemptyArray(report.readyMethodIds)
     && emptyArray(report.blockedMethodIds);
+}
+
+/**
+ * Run gate (ROADMAP Phase 1 step 4). Once Input Check has been evaluated and is
+ * not READY, Run can only stop with an error, so it is shown as blocked and
+ * opens Input Check instead. Before the first evaluation Run stays available:
+ * it evaluates the inputs itself and, if they are not READY, says so in plain
+ * words (see the Load Calc controller's handleFailure).
+ */
+export function runInputGate(state) {
+  const readiness = state?.workflowReadiness || {};
+  const commonState = state?.commonInputState;
+  const evaluated = readiness.validationEvaluated === true && Boolean(commonState?.report);
+  if (!evaluated || isRoutineRunReady(commonState)) {
+    return Object.freeze({ blocked: false, issueCount: 0, label: null, sentence: null });
+  }
+  const issueCount = readiness.validationBlockerCount || commonState.report.blockers?.length || 0;
+  const issues = issueCount > 0 ? `${issueCount} issue${issueCount === 1 ? '' : 's'}` : 'not READY';
+  return Object.freeze({
+    blocked: true,
+    issueCount,
+    label: `Blocked: ${issues} — open Input Check`,
+    sentence: `Run is blocked: Input Check is not READY (${issues}). Open Input Check (step 6) to see what is missing, fix it, then Run.`,
+  });
 }
 
 /**
@@ -416,6 +460,12 @@ function normalizeOneClickRunStatus(workflow, state) {
   const status = button?.querySelector('.empirical-load-calc__workflow-status');
   if (!button || !status) return;
   const active = state?.activeTab === 'verify';
+  const inputGate = runInputGate(state);
+  if (inputGate.blocked) {
+    button.dataset.stepState = 'blocked';
+    status.textContent = inputGate.issueCount > 0 ? `Blocked: ${inputGate.issueCount}` : 'Blocked';
+    return;
+  }
   button.dataset.stepState = active ? 'current' : 'ready';
   status.textContent = isRoutineRunReady(state?.commonInputState) ? 'Ready' : 'One-click';
 }
