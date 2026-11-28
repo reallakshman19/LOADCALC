@@ -375,6 +375,64 @@ The pipes the Run counts add 1,407 kg = **13.80 kN**, exactly the EMPTY increase
 
 **Open: α at temperature.** Project Data's α = 1.17×10⁻⁵ /°C is labelled "at 21 °C". The mean coefficient from 21 °C to 309 °C for carbon steel is higher (to be confirmed from ASME B31.3 Appendix C). Growth, and so the guide bounds, scale with it.
 
+#### 1885S results table (guide / line stop plan, step 7, 2026-11-28)
+
+Every support site, client Line List (insulation, densities, T2 = 309 °C), Option B, N rounded. Rebuild with `node benchmarks/checks/1885s-results-table.mjs` (`--sample` for the repo's sample Line List); the script stops with an error if a column does not add up to the Run's own total. The same run is guarded by `npm run test:e2e`.
+
+- **ACCURATE:** EMPTY / OPE / HYD vertical, friction μ·N_OPE (μ 0.3 default), line stop axial friction (larger side).
+- **SCREENING:** line stop with thermal push, and guide lateral bounds. "open" = no upper bound until the line ends (nozzle, tee or free end) are known. A FINDING is the force *if* that line end were fixed; where the leg is very short it is capped at the fully blocked growth E·A·α·ΔT.
+- Friction "—": the support holds both horizontal directions (R+G+LS), or bears no load (NONE). PS-12249 lifts off (Option B), so 0 in every case.
+- PS-12034 and PS-12228 each appear at two sites on two different lines (same tag in the model); kept as separate rows.
+- Expansion α = 1.17×10⁻⁵ /°C (Project Data at 21 °C) until the owner's expansion table is filled; the thermal columns scale with it.
+
+| # | Support | Line | Branch | Type | EMPTY | OPE | HYD | Friction μ·N_OPE | Line stop axial, friction | Line stop with push, lower – upper | Guide lateral, lower – upper |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 1 | PS-12060 | S8810101 | B1 | R+G+LS | 6,519 | 6,605 | 7,808 | — | 2,405 | 2,405 – open; FINDING: 739 kN if the line end is fixed | 0 – 0 |
+| 2 | PS-12059 | S8810101 | B1 | R | 7,920 | 8,017 | 9,367 | 2,405 |  |  |  |
+| 3 | =1006649732/51465 | S8810101 | B3 | NONE | 0 | 0 | 0 | — |  |  |  |
+| 4 | =1006649732/51478 | S8810101 | B4 | R | 357 | 358 | 358 | 107 |  |  |  |
+| 5 | PS-12171 | S8810101 | B6 | R | 3,427 | 3,479 | 4,205 | 1,044 |  |  |  |
+| 6 | PS-12166 | S8810101 | B7 | R+LS | 3,926 | 3,975 | 4,651 | 1,192 | 0 | 0 – open; FINDING: 11,589 kN if the line end is fixed (= fully blocked growth) |  |
+| 7 | PS-12034 | S8810103 | B1 | R+LS | 4,910 | 4,967 | 5,758 | 1,490 | 1,236 | 1,236 – open; FINDING: 378 kN if the line end is fixed |  |
+| 8 | PS-12228 | S8810103 | B1 | R | 4,060 | 4,120 | 4,963 | 1,236 |  |  |  |
+| 9 | PS-12243 | S8810111 | B1 | R+LS | 2,626 | 2,662 | 3,166 | 799 | 0 | 0 – open |  |
+| 10 | =1006649732/51422 | S8810111 | B1 | NONE | 0 | 0 | 0 | — |  |  |  |
+| 11 | PS-12263 | S8810111 | B1 | R | 2,096 | 2,123 | 2,496 | 637 |  |  |  |
+| 12 | PS-12242 | S8810111 | B1 | R+G | 2,420 | 2,458 | 2,988 | 737 |  |  | 496 – 1,984 |
+| 13 | PS-12240 | S8810111 | B1 | R+LS | 3,562 | 3,616 | 4,371 | 1,085 | 1,374 | 1,374 – open |  |
+| 14 | PS-12061 | S8810111 | B1 | R | 1,823 | 1,850 | 2,238 | 555 |  |  |  |
+| 15 | PS-12170 | S8810111 | B2 | R | 3,272 | 3,321 | 4,003 | 996 |  |  |  |
+| 16 | PS-12169 | S8810111 | B2 | R+G+LS | 4,105 | 4,167 | 5,039 | — | 996 | 996 – open | 0 – 0 |
+| 17 | PS-12165 | S8810111 | B2 | R | 2,020 | 2,051 | 2,492 | 615 |  |  |  |
+| 18 | PS-12297 | S8810111 | B2 | R | 978 | 990 | 1,158 | 297 |  |  |  |
+| 19 | PS-12156 | S8810111 | B2 | R | 1,987 | 2,013 | 2,372 | 604 |  |  |  |
+| 20 | =1006657924/39580 | S8810112 | B6 | NONE | 0 | 0 | 0 | — |  |  |  |
+| 21 | PS-12034 | S8810112 | B6 | R+G+LS | 2,973 | 3,005 | 3,453 | — | 726 | 726 – open; FINDING: 114 kN if the line end is fixed | 0 – 0 |
+| 22 | PS-12228 | S8810112 | B6 | R | 2,381 | 2,420 | 2,958 | 726 |  |  |  |
+| 23 | PS-12244 | S8811951 | B2 | R | 4,013 | 4,035 | 4,343 | 1,210 |  |  |  |
+| 24 | PS-12246 | S8811951 | B2 | R | 2,637 | 2,650 | 2,839 | 795 |  |  |  |
+| 25 | PS-12247 | S8811951 | B2 | R | 8,929 | 8,947 | 9,207 | 2,684 |  |  |  |
+| 26 | =1006649732/51254 | S8811951 | B2 | NONE | 0 | 0 | 0 | — |  |  |  |
+| 27 | PS-12248 | S8811951 | B2 | R+G+LS | 3,925 | 3,954 | 4,361 | — | 4,690 | 4,690 – open; FINDING: 4,725 kN if the line end is fixed (= fully blocked growth) | 3 – 153 |
+| 28 | PS-12249 | S8811951 | B2 | R | 0 | 0 | 0 | 0 |  |  |  |
+| 29 | PS-12250 | S8811951 | B2 | R | 7,572 | 7,580 | 7,693 | 2,274 |  |  |  |
+| 30 | PS-12231 | S8811951 | B7 | R+LS | 2,204 | 2,225 | 2,514 | 667 | 545 | 2,068 – open |  |
+| 31 | PS-12311 | S8811951 | B7 | R | 1,791 | 1,818 | 2,192 | 545 |  |  |  |
+| 32 | PS-12321 | S8811951 | B7 | R | 2,192 | 2,224 | 2,670 | 667 |  |  |  |
+| 33 | PS-12295 | S8811951 | B7 | R+LS | 2,808 | 2,850 | 3,422 | 855 | 667 | 2,361 – open; FINDING: 6 kN if the line end is fixed |  |
+| 34 | PS-12267 | S8811951 | B7 | R | 1,111 | 1,133 | 1,442 | 340 |  |  |  |
+| 35 | PS-12268 | S8811951 | B7 | R+G+LS | 2,877 | 2,906 | 3,316 | — | 340 | 1,862 – open | 2,144 – 8,578 |
+| 36 | =1006649732/51378 | S8811951 | B7 | NONE | 0 | 0 | 0 | — |  |  |  |
+| | **Total** | | | | **101,421** | **102,521** | **117,843** | **24,565** | | | |
+
+Hand checks on the table itself:
+- Columns add up to the Run: EMPTY / OPE / HYD and friction differ from the Run's totals by 0.000 N.
+- Friction = 0.3 × OPE, e.g. PS-12059: 0.3 × 8,017 = 2,405 N; PS-12244: 0.3 × 4,035 = 1,210 N.
+- A line stop's axial friction is its larger side's sum: PS-12060 = PS-12059 (2,405, its only neighbour); PS-12240 = PS-12263 + PS-12242 = 637 + 737 = 1,374; PS-12248 = PS-12247 + PS-12246 + PS-12244 = 2,684 + 795 + 1,210 = 4,690 (the other side, PS-12250 + PS-12249 = 2,274 + 0, is smaller).
+- Sample Line List totals (same script, `--sample`): 87,618 / 100,366 / 104,041 N and friction 24,073 N, as in the first review below.
+
+Not yet: a comparison with CAESAR II or another stiffness program for these supports (needs a run from the owner).
+
 #### First benchmark results review (2026-11-26)
 
 Run completes for EMPTY / OPE / HYD (87.6 / 100.4 / 104.0 kN). Force and moment equilibrium pass in all three cases (residual ≈ 1e-11 N). 37 support sites.

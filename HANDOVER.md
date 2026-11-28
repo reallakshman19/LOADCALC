@@ -27,6 +27,8 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 
 Hand checks in `tests/e2e/checks-1885s.mjs` recompute each result from its inputs: every weight item = m·g; Σ reactions = applied; friction = μ·N_OPE per support (the lifted-off rest gives 0); each line stop side = Σ its supports' axial friction, design = larger side; guide bounds = 3EIΔ/L³ and 12EIΔ/L³ with Δ = α·ΔT·L·(sideways part); the pane shows the same values, current, with their ACCURATE / SCREENING labels. Expected numbers (totals and 5 golden supports in all three cases) are in `tests/e2e/expected-1885s.mjs`; change them only with a reason in ROADMAP. A deliberate bug (I_max in the guide lower bound) was caught by it.
 
+**Results table (2026-11-28):** every support's EMPTY / OPE / HYD, friction, line stop and guide values are in ROADMAP ("1885S results table"). Rebuild it with `node benchmarks/checks/1885s-results-table.mjs` (client Line List if present, `--sample` for the repo one); it fails if a column does not add up to the Run.
+
 **Benchmark now runs with the real client Line List** (local only, `public/fixtures/AML-*.xlsx`, excluded in `.git/info/exclude`, never commit). Upload it in Master Data in place of the sample CSV in `benchmarks/browser/1885s-run-steps.js` step 3; the rest of the steps are unchanged. The browser pane is slow: run each step as its own call and check the page before the next one.
 
 **Waiting on the owner:**
