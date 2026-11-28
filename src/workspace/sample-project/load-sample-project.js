@@ -90,6 +90,10 @@ export async function loadSampleProject({
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   autoNormalizeBundledMasters();
+  // The Calculation Defaults screen writes the product defaults into Project
+  // Data the first time it opens. Done here, before the seal, so opening that
+  // screen after the Run does not make the Run's input stale (HISTORICAL).
+  projectDataStore.applyProductDefaults();
   await autoGenerateMasterEnrichment();
   await autoBindMasterSources();
   await autoEnsureDefaultQualificationProfile();

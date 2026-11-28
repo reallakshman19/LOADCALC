@@ -27,6 +27,8 @@ Written 2026-11-26 for the next agent or engineer. Kickoff prompt for a new agen
 
 Hand checks in `tests/e2e/checks-1885s.mjs` recompute each result from its inputs: every weight item = m·g; Σ reactions = applied; friction = μ·N_OPE per support (the lifted-off rest gives 0); each line stop side = Σ its supports' axial friction, design = larger side; guide bounds = 3EIΔ/L³ and 12EIΔ/L³ with Δ = α·ΔT·L·(sideways part); the pane shows the same values, current, with their ACCURATE / SCREENING labels. Expected numbers (totals and 5 golden supports in all three cases) are in `tests/e2e/expected-1885s.mjs`; change them only with a reason in ROADMAP. A deliberate bug (I_max in the guide lower bound) was caught by it.
 
+**One-click sample project (2026-11-28):** the **Sample 1885S** button at the top of the Dataset Tree toolbar loads the model, the bundled masters and the sample Line List, accepts the 172 master proposals and the 26 clear-winner fitting weights, adds the 5 SAMPLE ASSUMPTION placeholder weights (`public/master-data/sample-1885s-placeholder-weights.json`) and opens Load Calc at the Run step (READY). One more click, Run, gives 87.6 / 100.4 / 104.0 kN. Code: `src/workspace/sample-project/load-sample-project.js`; the end-to-end suite calls the same function, so it tests what the button does. The Results page starts with a "SAMPLE ASSUMPTION inputs in this Run" box (`sample-assumption-notice.js`): the placeholder weights, lines on the 1000 kg/m³ density fallback, and the 0 mm insulation default. Click-through of all 8 steps after the Run found two things (details in ROADMAP Phase 1): opening Calculation Defaults the first time wrote product defaults and made the Run HISTORICAL (fixed for the sample, still open for other models), and Check Topology still asks about `=1006649732/51465` although Project Data sets it to NONE.
+
 **Results table (2026-11-28):** every support's EMPTY / OPE / HYD, friction, line stop and guide values are in ROADMAP ("1885S results table"). Rebuild it with `node benchmarks/checks/1885s-results-table.mjs` (client Line List if present, `--sample` for the repo one); it fails if a column does not add up to the Run.
 
 **Benchmark now runs with the real client Line List** (local only, `public/fixtures/AML-*.xlsx`, excluded in `.git/info/exclude`, never commit). Upload it in Master Data in place of the sample CSV in `benchmarks/browser/1885s-run-steps.js` step 3; the rest of the steps are unchanged. The browser pane is slow: run each step as its own call and check the page before the next one.
@@ -187,10 +189,10 @@ Line temperatures: **from the Line List master since 2026-11-27** (`src/workspac
 The repo also registers `EMPIRICAL_RESTRAINT_NETWORK_V1/V2` (guide/line stop thermal screening), but has only topology eligibility for them in `src/core/non-fea-analysis-plan/topology-eligibility.js`, no runtime.
 
 ### Other Phase 1 items still open
-- "Load sample project" button (one click: Sjson + Line List + placeholder weights).
+- ~~"Load sample project" button~~ Done 2026-11-28 ("Sample 1885S", see section 0).
 - Gate Run on Input Check, with a plain-language message.
-- End-to-end golden-number test (ROADMAP L11). A headless harness, without the browser, would be high value.
-- Map PS-12297 (SREF FT17-7.6-PMP) to a support family.
+- ~~End-to-end golden-number test (ROADMAP L11)~~ Done 2026-11-28 (`npm run test:e2e`).
+- ~~Map PS-12297 (SREF FT17-7.6-PMP) to a support family.~~ Owner set it to REST, 2026-11-26.
 - Confirm the 697 kg instrument `=1006649732/51250` with the owner.
 
 ## 8. Open questions for the owner
